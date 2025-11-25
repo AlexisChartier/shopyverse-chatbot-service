@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",             // Cible moderne
+    "module": "NodeNext",           // Indispensable pour le "type": "module"
+    "moduleResolution": "NodeNext", // Indispensable pour le "type": "module"
+    "verbatimModuleSyntax": true,   // L'option qui causait l'erreur (gardez-la à true)
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
