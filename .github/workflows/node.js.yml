@@ -4,9 +4,12 @@
 # Step 1: Check out the source code.
 # Step 2: Set up different versions of Node.js for testing.
 # Step 3: Perform a clean install of Node.js dependencies.
-# Step 4: Cache and restore dependencies for faster builds.
-# Step 5: Build the source code.
-# Step 6: Run tests using different versions of Node.js.
+# Step 4: Ensure the project is clean, easy to read, debuggable, and maintainable. (Linting)
+# Step 5: Cache and restore dependencies for faster builds.
+# Step 6: Build the source code.
+# Step 7: Run tests using different versions of Node.js.
+# Step 8: Deploying to a staging environment on push to main
+# Step 9: Manual approval for production deployment
 
 name: Node.js CI
 
@@ -23,20 +26,34 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [12.x, 14.x, 16.x] # Define a matrix of Node.js versions to test.There would be 3 jobs for 12.x, 14.x, 16.x
+        node-version: [20.x, 22.x, 24.x] # Verify that it works with version above 20
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2 # Step 1: Check out the source code from the repository.
+      uses: actions/checkout@v3 # Check out the source code from the repository.
 
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v2
+      uses: actions/setup-node@v3
       with:
         node-version: ${{ matrix.node-version }}
-        cache: 'npm' # Step 2: Use npm caching for faster dependency installs.
+        cache: 'npm' # Use npm caching for faster dependency installs.
 
     - name: Install Node.js dependencies
-      run: npm ci # Step 3: Perform a clean install of Node.js dependencies.
+      run: npm ci # Perform a clean install of Node.js dependencies.
+
+    - name: Run linting
+      run: npm run lint #  Ensure the project is clean, easy to read, debuggable, and maintainable.
 
     - name: Run tests
-      run: npm test # Step 4: Run tests using the specified Node.js version.
+      run: npm test # Run tests using the specified Node.js version.
+
+  deploy-staging:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Deploy to staging
+        uses: some-deployment-action@v1
+        with:
+          environment: staging
