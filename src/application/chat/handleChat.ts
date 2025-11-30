@@ -1,5 +1,5 @@
 import { retrieverService } from '../retriever/retrieveContext.js';
-import { generateText } from '../../infrastructure/llm/HfInferenceClient.js';
+import { llmClient } from '../../infrastructure/llm/HfInferenceClient.js';
 import { RAG_PROMPT_TEMPLATE } from '../../prompts/rag.fr.js';
 
 export class ChatService {
@@ -26,10 +26,8 @@ export class ChatService {
 
       // 3. Génération de la réponse via LLM
       console.log("Appel du LLM...");
-      const llmResponse = await generateText(prompt);
-      
-      // Nettoyage basique de la réponse (parfois le LLM répète le prompt)
-      answer = llmResponse.generated_text.replace(prompt, '').trim();
+      // llmClient.generate retourne directement la chaîne de caractères
+      answer = await llmClient.generate(prompt);
     }
 
     return {
