@@ -5,6 +5,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "tsc",
+    "start": "node dist/app/server.js",
+    "dev": "nodemon --watch \"src/**/*.ts\" --exec \"node --loader ts-node/esm\" src/app/server.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
