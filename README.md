@@ -1,185 +1,144 @@
-🤖 ShopyVerse - Chatbot Service
-===============================
+**ShopyVerse — Chatbot Service**
+================================
 
-Ce microservice est l'agent conversationnel intelligent de la plateforme e-commerce ShopyVerse. Il utilise une architecture RAG (Retrieval-Augmented Generation) pour répondre aux questions des utilisateurs en se basant sur une base de connaissances vectorielle (FAQ) et peut interagir avec le catalogue produits.
+Microservice RAG (Retrieval-Augmented Generation) pour l’assistant conversationnel de ShopyVerse.
 
-  
+Technos principales : `Fastify` (API), `Qdrant` (vector store), HuggingFace (LLM + embeddings).
 
-🏗 Architecture & Stack Technique
----------------------------------
+Objectif : fournir des réponses précises, vérifiables et basées uniquement sur la base de connaissances ingestée.
 
-Le projet suit une architecture modulaire inspirée du Domain-Driven Design (DDD) pour séparer la logique métier de l'infrastructure.
+**Architecture (résumé)**
+-------------------------
 
-   Runtime : Node.js v20+ (TypeScript)
-   Framework Web : [Fastify](https://www.fastify.io/) (Performance & faible overhead)
-   Base de données Vectorielle : [Qdrant](https://qdrant.tech/) (Stockage des embeddings FAQ/Produits)
-   LLM & Embeddings : [Hugging Face Inference API](https://huggingface.co/inference-api) (Modèles Mistral/Zephyr & MiniLM)
-   Validation : Zod (Variables d'env et DTOs)
-   Observabilité : Prometheus (Metrics) & Pino (Logs)
+1. Le client envoie une requête à `POST /api/v1/chat`.
+2. Le service récupère le contexte via une recherche vectorielle dans `Qdrant`.
+3. On construit un prompt RAG (FR) contenant les extraits pertinents.
+4. Le prompt est envoyé au LLM via l’API HuggingFace Chat Completions.
+5. Le service renvoie une réponse structurée `{ answer, sources }`.
 
- Arborescence du projet
+**Principales fonctionnalités**
+------------------------------
 
-    src/
-    ├── app/                   Couche Interface (Serveur Fastify, Routes, Middlewares)
-    ├── application/           Cas d'utilisation (Chat flow, RAG, Ingestion)
-    ├── domain/                Entités métier et Interfaces (Types partagés)
-    ├── infrastructure/        Implémentations techniques (Clients Qdrant, HF, Tools)
-    ├── prompts/               Templates de prompts pour le LLM
-    └── index.ts               Point d'entrée
-    
+- **Chatbot RAG** : recherche vectorielle, sélection des meilleurs passages, réponse concise basée sur les données.
+- **Ingestion** : route `/api/v1/ingest` pour ajouter des documents (vectorisation via HF embeddings + stockage Qdrant).
+- **Sécurité** : authentification simple par header `x-api-key` sur les routes `api/v1/*`.
+- **Observabilité** : logs structurés (Pino) et endpoint `/metrics` (Prometheus).
 
-  
+**Modèle LLM**
+--------------
 
-🚀 Installation et Démarrage
-----------------------------
+Le service est conçu pour utiliser des modèles compatibles avec l’API HuggingFace Chat Completions (ex. `Qwen2.5-7B-Instruct`).
+Avantages : pas d’hébergement de modèle requis, latence faible, bonnes performances en RAG.
 
- Prérequis
+Règles du prompt RAG (extrait)
+------------------------------
 
-   Node.js 20+
-   Docker & Docker Compose (pour Qdrant)
-   Un Token [Hugging Face](https://huggingface.co/settings/tokens) (Gratuit)
+- Répondre **EXCLUSIVELY** avec les informations fournies dans le contexte.
+- Être concis et professionnel (ton e‑commerce).
+- Si l’information n’existe pas dans le contexte, indiquer clairement qu’on ne sait pas.
 
- 1\. Installation des dépendances
+Exemple d’encadrement du prompt :
 
-    npm install
-    
+```
+Tu es l'assistant virtuel de ShopyVerse.
+Règles :
+1) Utilise uniquement le CONTEXTE ci-dessous.
+2) Si la réponse n'est pas présente, réponds "Je n'ai pas cette information".
+3) Ne pas inventer d'informations.
 
- 2\. Configuration (.env)
+===== CONTEXTE =====
+...extraits issus de Qdrant...
+===== FIN CONTEXTE =====
 
-Copiez le fichier d'exemple et remplissez-le :
+Question du client : ...
+```
 
-    cp .env.example .env
-    
+Cette structure limite fortement les hallucinations.
 
-Variables requises :
+**Installation rapide**
+----------------------
 
-    PORT=3001
-    NODEENV=development
-    APIKEY=votreclesecreteinterne  Pour protéger l'API
-    HFACCESSTOKEN=hfxxxxxxxxxxxx    Votre token Hugging Face
-    QDRANTURL=http://localhost:6333   URL locale de Qdrant
-    APICOREURL=http://localhost:3000  URL de l'API Catalogue (pour les tools)
-    
+Prérequis : `Node.js >= 18`, `Docker` si vous voulez lancer Qdrant localement, et un token HuggingFace.
 
- 3\. Lancement de l'infrastructure locale
+1) Copier le fichier d'exemple d'environnement :
 
-Démarrez Qdrant via Docker :
+```bash
+cp .env.example .env
+# Éditez .env pour ajouter HF token, QDRANT url, API key, etc.
+```
 
-    docker-compose up -d
-    
+2) Installer puis lancer en mode développement :
 
- 4\. Initialisation des données (Seed)
+```bash
+npm install
+npm run dev
+```
 
-Chargez la FAQ initiale dans la base vectorielle :
+L’API démarre par défaut sur le port défini dans la variable d’environnement (par ex. `3001`).
 
-    npx ts-node-esm scripts/seed-faq.ts
-    
+**Variables d’environnement importantes**
+---------------------------------------
 
- 5\. Démarrage du serveur
+- `HF_API_TOKEN` : token HuggingFace
+- `QDRANT_URL` : URL du service Qdrant
+- `API_KEY` : clé API pour protéger les endpoints
+- Consultez ` .env.example` pour la liste complète.
 
-En mode développement (avec hot-reload) :
+**Endpoints principaux**
+------------------------
 
-    npm run dev
-    
+- `POST /api/v1/ingest` — ingérer un ou plusieurs documents (JSON).
+- `POST /api/v1/chat` — envoyer un message utilisateur et recevoir `{ answer, sources }`.
+- `GET /metrics` — métriques Prometheus.
 
-  
+Exemple : ingestion (FAQ)
 
-🔌 Documentation API
---------------------
+```bash
+curl -s -X POST http://localhost:3001/api/v1/ingest \
+	-H "Content-Type: application/json" \
+	-H "x-api-key: dev-api-key" \
+	-d '{
+		"documents": [
+			{
+				"content": "Nos délais de livraison sont de 3 à 5 jours ouvrés en France.",
+				"metadata": { "topic": "livraison" }
+			}
+		]
+	}'
+```
 
- 1\. Chat (RAG)
+Exemple : appel au chatbot
 
-POST /chat  
-Endpoint principal pour converser avec l'assistant.
+```bash
+curl -s -X POST http://localhost:3001/api/v1/chat \
+	-H "Content-Type: application/json" \
+	-H "x-api-key: dev-api-key" \
+	-d '{"message": "Bonjour, quels sont vos délais de livraison ?"}'
 
-   Auth: x-api-key header requis.
+# Réponse attendue (exemple):
+// {
+//   "answer": "Les délais de livraison sont de 3 à 5 jours ouvrés en France métropolitaine.",
+//   "sources": [ { "title": "livraison", "text": "Nos délais de livraison..." } ]
+// }
+```
 
-    // Request
-    {
-      "message": "Quels sont les délais de livraison ?",
-      "sessionId": "optional-uuid"
-    }
-    
-    // Response
-    {
-      "answer": "Les délais sont de 3 à 5 jours ouvrés...",
-      "sources": [ { "title": "livraison", "text": "..." } ]
-    }
-    
-
- 2\. Ingestion de documents
-
-POST /ingest  
-Permet d'indexer de nouveaux documents (FAQ ou descriptions produits) dans Qdrant.
-
-    {
-      "documents": [
-        {
-          "content": "Texte à indexer",
-          "metadata": { "topic": "retour", "id": "123" }
-        }
-      ]
-    }
-    
-
- 3\. Observabilité
-
-   GET /health : Vérification de l'état du service (Liveness/Readiness).
-   GET /metrics : Métriques Prometheus (Durée requêtes, erreurs, etc.).
-
-  
-
-✅ État d'avancement (Sprint Actuel)
------------------------------------
-
-Voici les fonctionnalités implémentées à ce jour :
-
-    Setup du projet : Configuration TypeScript, Fastify, ESLint, Jest.
-    Pipeline RAG :
-        Client Hugging Face pour la génération de texte.
-        Client Embeddings pour la vectorisation.
-        Recherche de contexte pertinent dans Qdrant.
-    Pipeline d'Ingestion : Script de seed et endpoint API pour charger la FAQ.
-    Infrastructure Tools : Architecture prête pour le "Tool Calling" (recherche produit).
-    Sécurité & Config : Middleware d'authentification par API Key et validation Zod.
-    Observabilité : Logs structurés JSON et endpoint métriques Prometheus.
-    Tests : Configuration Jest et mocks des services externes.
-
-  
-
-🚧 Roadmap & Reste à faire
+**Roadmap (brefs points)**
 --------------------------
 
-Les points suivants sont prévus pour les prochains sprints afin de finaliser le service :
+- Historique conversationnel (sessionId)
+- Recommandation produit via tool-calling
+- Reranker HuggingFace pour améliorer la pertinence
+- Monitoring & alerting avancés
+- Docker image, Helm chart et CI/CD (GitHub Actions)
+- Widget chat côté front
 
- 1\. Intégration Réelle avec le Catalogue (Tooling)
+**Contribuer / développement**
+-----------------------------
 
-   Actuellement : Le ProductSearchTool retourne des données mockées.
-   À faire : Connecter le tool à l'API Core (shopyverse-api-core) via des requêtes HTTP réelles pour chercher les produits en stock.
+- Lancer en local : `npm run dev`.
+- Ajouter des documents via `/api/v1/ingest` pour tester les scénarios RAG.
+- Ouvrir une PR sur la branche `main` pour proposer des améliorations.
 
- 2\. Gestion de la Mémoire (Session)
+---
 
-   Actuellement : Chaque message est traité indépendamment (Stateless).
-   À faire : Stocker l'historique de conversation (Redis ou Postgres) pour permettre le suivi du contexte (ex: "Et en rouge ?" après une recherche de chaussures).
-
- 3\. Amélioration du RAG
-
-   Prompt Engineering : Affiner le prompt système pour éviter les hallucinations.
-   Guardrails : Ajouter une couche de modération pour bloquer les sujets hors-sujet ou inappropriés.
-
- 4\. Déploiement & CI/CD
-
-   Finaliser le Dockerfile de production (Multi-stage build).
-   Créer les manifests Kubernetes (Deployment, Service, ConfigMap).
-   Activer le pipeline CI/CD complet (Build -> Push Registry -> Deploy Staging).
-
-  
-
-🧪 Tests
---------
-
-Lancer la suite de tests unitaires :
-
-npm run test
-
-Note : Les tests utilisent des mocks pour Qdrant et Hugging Face afin de s'exécuter sans connexion réseau.
+Si vous souhaitez que je reformule certains paragraphes (ex. prompt RAG, guide d’ingestion, ou section technique), dites-moi laquelle et je l’affinerai.

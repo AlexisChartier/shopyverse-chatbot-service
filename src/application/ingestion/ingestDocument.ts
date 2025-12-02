@@ -17,7 +17,7 @@ export class IngestionService {
     if (!exists) {
       await qdrantClient.createCollection(this.collectionName, {
         vectors: {
-          size: 384, // Taille du modèle MiniLM-L12-v2
+          size: 384, 
           distance: 'Cosine',
         },
       });
