@@ -1,185 +1,241 @@
-🤖 ShopyVerse - Chatbot Service
-===============================
+**ShopyVerse Chatbot Service**
+==============================
 
-Ce microservice est l'agent conversationnel intelligent de la plateforme e-commerce ShopyVerse. Il utilise une architecture RAG (Retrieval-Augmented Generation) pour répondre aux questions des utilisateurs en se basant sur une base de connaissances vectorielle (FAQ) et peut interagir avec le catalogue produits.
+**Microservice IA – Retrieval-Augmented Chatbot (Fastify + HuggingFace + Qdrant)**
 
-  
+Ce microservice fournit l’assistant conversationnel de ShopyVerse.
 
-🏗 Architecture & Stack Technique
----------------------------------
+Il repose sur une architecture simple, performante et extensible :
 
-Le projet suit une architecture modulaire inspirée du Domain-Driven Design (DDD) pour séparer la logique métier de l'infrastructure.
-
-   Runtime : Node.js v20+ (TypeScript)
-   Framework Web : [Fastify](https://www.fastify.io/) (Performance & faible overhead)
-   Base de données Vectorielle : [Qdrant](https://qdrant.tech/) (Stockage des embeddings FAQ/Produits)
-   LLM & Embeddings : [Hugging Face Inference API](https://huggingface.co/inference-api) (Modèles Mistral/Zephyr & MiniLM)
-   Validation : Zod (Variables d'env et DTOs)
-   Observabilité : Prometheus (Metrics) & Pino (Logs)
-
- Arborescence du projet
-
-    src/
-    ├── app/                   Couche Interface (Serveur Fastify, Routes, Middlewares)
-    ├── application/           Cas d'utilisation (Chat flow, RAG, Ingestion)
-    ├── domain/                Entités métier et Interfaces (Types partagés)
-    ├── infrastructure/        Implémentations techniques (Clients Qdrant, HF, Tools)
-    ├── prompts/               Templates de prompts pour le LLM
-    └── index.ts               Point d'entrée
+*   **Fastify** pour l’API REST
+    
+*   **Qdrant** comme base vectorielle
+    
+*   **HuggingFace Inference API** pour le LLM
+    
+*   **Embeddings HF** pour la recherche de contexte
+    
+*   **RAG (Retrieval-Augmented Generation)** pour des réponses fiables basées sur des données réelles
     
 
-  
+**Architecture Résumée**
+------------------------
 
-🚀 Installation et Démarrage
-----------------------------
+Client → /api/v1/chat
 
- Prérequis
+↓
 
-   Node.js 20+
-   Docker & Docker Compose (pour Qdrant)
-   Un Token [Hugging Face](https://huggingface.co/settings/tokens) (Gratuit)
+ChatService.processMessage()
 
- 1\. Installation des dépendances
+→ RetrieverService.search() (Qdrant search)
 
-    npm install
+→ RAG\_PROMPT\_TEMPLATE() (prompt contextualisé FR)
+
+→ llmClient.generate() (HF chatCompletion API)
+
+↓
+
+Réponse finale (answer + sources)Le service supporte également une route d’ingestion pour alimenter la base de connaissances.
+
+**Fonctionnalités**
+===================
+
+### **✓ Chatbot RAG complet**
+
+*   Recherche vectorielle dans Qdrant
+    
+*   Sélection des meilleurs passages (score > 0.4)
+    
+*   Prompt French-Optimized pour Qwen2.5
+    
+*   Réponse concise et strictement basée sur les données ingerées
     
 
- 2\. Configuration (.env)
+### **✓ Ingestion de documents**
 
-Copiez le fichier d'exemple et remplissez-le :
+Via /api/v1/ingest :
 
-    cp .env.example .env
+*   création automatique de la collection shopyverse\_docs
+    
+*   vectorisation via HuggingFace embeddings
+    
+*   stockage dans Qdrant
     
 
-Variables requises :
+### **✓ Authentification simple par API Key**
 
-    PORT=3001
-    NODEENV=development
-    APIKEY=votreclesecreteinterne  Pour protéger l'API
-    HFACCESSTOKEN=hfxxxxxxxxxxxx    Votre token Hugging Face
-    QDRANTURL=http://localhost:6333   URL locale de Qdrant
-    APICOREURL=http://localhost:3000  URL de l'API Catalogue (pour les tools)
+Toutes les routes /api/v1/\* sont protégées par un header :x-api-key:
+
+### **✓ Observabilité**
+
+*   logs structurés Pino
+    
+*   route /metrics pour export Prometheus
     
 
- 3\. Lancement de l'infrastructure locale
+**🤖 Modèle LLM utilisé**
+=========================
 
-Démarrez Qdrant via Docker :
+Le chatbot utilise :
 
-    docker-compose up -d
+### **Qwen/Qwen2.5-7B-Instruct**
+
+Modèle compatible **HuggingFace Chat Completions API**, excellent en RAG, multilingue et gratuit via inference-serverless.
+
+Utilisation via chatCompletion :
+
+*   pas besoin d’héberger le modèle
+    
+*   très faible latence (~1s)
+    
+*   réponses stables et non-hallucinées
     
 
- 4\. Initialisation des données (Seed)
+**RAG PROMPT (optimisé)**
+=========================
 
-Chargez la FAQ initiale dans la base vectorielle :
+Le prompt utilisé force le LLM à :
 
-    npx ts-node-esm scripts/seed-faq.ts
+*   répondre **EXCLUSIVEMENT selon le contexte fourni**
+    
+*   être concis
+    
+*   parler en français
+    
+*   éviter toute hallucination
+    
+*   répondre comme un assistant e-commerce professionnel
     
 
- 5\. Démarrage du serveur
+Le rendu type :Tu es l’assistant virtuel de ShopyVerse.
 
-En mode développement (avec hot-reload) :
+Règles strictes :
 
-    npm run dev
+1\. Utilise EXCLUSIVEMENT les informations ci-dessous.
+
+2\. Si la réponse n’est pas présente, dis-le simplement.
+
+3\. N’invente jamais d’informations.
+
+\===== CONTEXTE =====
+
+...
+
+\===== FIN CONTEXTE =====
+
+Question du client :
+
+...
+
+**Installation & Lancement**
+============================
+
+**1\. Dépendances**
+-------------------
+
+*   Node.js 18+
+    
+*   Qdrant (Docker ou local)
+    
+*   HuggingFace account + Access Token
     
 
-  
+**2. .env requisPORT=3001**
+---------------------------
 
-🔌 Documentation API
+**\# HuggingFace**
+------------------
+
+**HF\_TOKEN=hf\_xxxxx**
+-----------------------
+
+**HF\_MODEL=Qwen/Qwen2.5-7B-Instruct**
+--------------------------------------
+
+**\# Qdrant**
+-------------
+
+**QDRANT\_URL=http://localhost:6333**
+-------------------------------------
+
+**\# API security**
+-------------------
+
+**API\_KEY=dev-api-key**
+------------------------
+
+**\# Core services**
 --------------------
 
- 1\. Chat (RAG)
+**API\_CORE\_URL=http://localhost:3000**
+----------------------------------------
 
-POST /chat  
-Endpoint principal pour converser avec l'assistant.
+**3\. Installer & lancer :**
+----------------------------
 
-   Auth: x-api-key header requis.
+**npm install**
+---------------
 
-    // Request
-    {
-      "message": "Quels sont les délais de livraison ?",
-      "sessionId": "optional-uuid"
-    }
+**npm run dev**
+---------------
+
+**Ingestion de documents (FAQ / connaissance)**
+===============================================
+
+Appeler :curl -X POST http://localhost:3001/api/v1/ingest \\
+
+\-H "Content-Type: application/json" \\
+
+\-H "x-api-key: dev-api-key" \\
+
+\-d '{
+
+"documents": \[
+
+{
+
+"content": "Nos délais de livraison sont de 3 à 5 jours ouvrés en France.",
+
+"metadata": { "topic": "livraison" }
+
+}
+
+\]
+
+}'
+
+**Exemple d’appel au chatbot**
+==============================
+
+curl -X POST http://localhost:3001/api/v1/chat \\
+
+\-H "Content-Type: application/json" \\
+
+\-H "x-api-key: dev-api-key" \\
+
+\-d '{"message": "Bonjour, quels sont vos délais de livraison ?"}'Réponse :{
+
+"answer": "Les délais de livraison sont de 3 à 5 jours ouvrés en France métropolitaine.",
+
+"sources": \[
+
+{ "title": "livraison", "text": "Nos délais de livraison..." }
+
+\]
+
+}
+
+**Améliorations prévues (roadmap interne)**
+===========================================
+
+*   Historique conversationnel (sessionId)
     
-    // Response
-    {
-      "answer": "Les délais sont de 3 à 5 jours ouvrés...",
-      "sources": [ { "title": "livraison", "text": "..." } ]
-    }
+*   Recommandation produit via tool-calling
     
-
- 2\. Ingestion de documents
-
-POST /ingest  
-Permet d'indexer de nouveaux documents (FAQ ou descriptions produits) dans Qdrant.
-
-    {
-      "documents": [
-        {
-          "content": "Texte à indexer",
-          "metadata": { "topic": "retour", "id": "123" }
-        }
-      ]
-    }
+*   Reranker HF pour améliorer la pertinence RAG
     
-
- 3\. Observabilité
-
-   GET /health : Vérification de l'état du service (Liveness/Readiness).
-   GET /metrics : Métriques Prometheus (Durée requêtes, erreurs, etc.).
-
-  
-
-✅ État d'avancement (Sprint Actuel)
------------------------------------
-
-Voici les fonctionnalités implémentées à ce jour :
-
-    Setup du projet : Configuration TypeScript, Fastify, ESLint, Jest.
-    Pipeline RAG :
-        Client Hugging Face pour la génération de texte.
-        Client Embeddings pour la vectorisation.
-        Recherche de contexte pertinent dans Qdrant.
-    Pipeline d'Ingestion : Script de seed et endpoint API pour charger la FAQ.
-    Infrastructure Tools : Architecture prête pour le "Tool Calling" (recherche produit).
-    Sécurité & Config : Middleware d'authentification par API Key et validation Zod.
-    Observabilité : Logs structurés JSON et endpoint métriques Prometheus.
-    Tests : Configuration Jest et mocks des services externes.
-
-  
-
-🚧 Roadmap & Reste à faire
---------------------------
-
-Les points suivants sont prévus pour les prochains sprints afin de finaliser le service :
-
- 1\. Intégration Réelle avec le Catalogue (Tooling)
-
-   Actuellement : Le ProductSearchTool retourne des données mockées.
-   À faire : Connecter le tool à l'API Core (shopyverse-api-core) via des requêtes HTTP réelles pour chercher les produits en stock.
-
- 2\. Gestion de la Mémoire (Session)
-
-   Actuellement : Chaque message est traité indépendamment (Stateless).
-   À faire : Stocker l'historique de conversation (Redis ou Postgres) pour permettre le suivi du contexte (ex: "Et en rouge ?" après une recherche de chaussures).
-
- 3\. Amélioration du RAG
-
-   Prompt Engineering : Affiner le prompt système pour éviter les hallucinations.
-   Guardrails : Ajouter une couche de modération pour bloquer les sujets hors-sujet ou inappropriés.
-
- 4\. Déploiement & CI/CD
-
-   Finaliser le Dockerfile de production (Multi-stage build).
-   Créer les manifests Kubernetes (Deployment, Service, ConfigMap).
-   Activer le pipeline CI/CD complet (Build -> Push Registry -> Deploy Staging).
-
-  
-
-🧪 Tests
---------
-
-Lancer la suite de tests unitaires :
-
-npm run test
-
-Note : Les tests utilisent des mocks pour Qdrant et Hugging Face afin de s'exécuter sans connexion réseau.
+*   Monitoring avancé
+    
+*   Dockerfile + Helm Chart + CI/CD GitHub Actions
+    
+*   Widget chat côté front

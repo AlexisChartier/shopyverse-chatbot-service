@@ -1,33 +1,50 @@
-import { HfInference } from '@huggingface/inference';
-import { config } from '../config/env.js';
-import type { LlmClient, LlmGenerationOptions } from './LlmClient.js';
+import { InferenceClient } from "@huggingface/inference";
+import { config } from "../config/env.js"; 
 
-export class HfInferenceClient implements LlmClient {
-  private hf: HfInference;
-  private model = 'mistralai/Mistral-7B-Instruct-v0.3'; // Modèle performant
+const HF_TOKEN = config.HF_ACCESS_TOKEN;
+const MODEL_ID = "Qwen/Qwen2.5-7B-Instruct";
 
-  constructor() {
-    this.hf = new HfInference(config.HF_ACCESS_TOKEN);
-  }
+const hf = new InferenceClient(HF_TOKEN);
 
-  async generate(prompt: string, options?: LlmGenerationOptions): Promise<string> {
-    try {
-      const result = await this.hf.textGeneration({
-        model: this.model,
-        inputs: prompt,
-        parameters: {
-          max_new_tokens: options?.maxTokens || 500,
-          temperature: options?.temperature || 0.7,
-          stop: options?.stopSequences,
-          return_full_text: false, // On veut juste la réponse
+class HfLlmClient {
+  async generate(prompt: string): Promise<string> {
+    // prompt = résultat de ton RAG_PROMPT_TEMPLATE(context, question)
+    const completion = await hf.chatCompletion({
+      model: MODEL_ID,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Tu es un assistant client pour une boutique en ligne nommée ShopyVerse. " +
+            "Tu réponds en français, de manière concise et utile. " +
+            "Tu dois t'appuyer en priorité sur le contexte fourni dans la demande de l'utilisateur. " +
+            "Si l'information n'est pas dans le contexte, indique-le honnêtement.",
         },
-      });
-      return result.generated_text;
-    } catch (error) {
-      console.error('Erreur Hugging Face:', error);
-      throw new Error('Echec de la génération LLM');
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      max_tokens: 512,
+      temperature: 0.2,
+    });
+
+    const choice = completion.choices?.[0];
+    const msgContent = choice?.message?.content;
+
+    let contentText = "";
+
+    if (typeof msgContent === "string") {
+      contentText = msgContent;
+    } else if (Array.isArray(msgContent)) {
+      // Pour TypeScript : on cast en tableau générique
+      contentText = (msgContent as Array<{ text?: string }>)
+        .map((c) => c.text ?? "")
+        .join("");
     }
+
+    return contentText.trim();
   }
 }
 
-export const llmClient = new HfInferenceClient();
+export const llmClient = new HfLlmClient();
