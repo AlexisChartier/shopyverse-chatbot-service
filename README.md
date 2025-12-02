@@ -1,216 +1,144 @@
-**ShopyVerse Chatbot Service**
-==============================
+**ShopyVerse — Chatbot Service**
+================================
 
-**Microservice IA – Retrieval-Augmented Chatbot (Fastify + HuggingFace + Qdrant)**
+Microservice RAG (Retrieval-Augmented Generation) pour l’assistant conversationnel de ShopyVerse.
 
-Ce microservice fournit l’assistant conversationnel de ShopyVerse.
+Technos principales : `Fastify` (API), `Qdrant` (vector store), HuggingFace (LLM + embeddings).
 
-Il repose sur une architecture simple, performante et extensible :
+Objectif : fournir des réponses précises, vérifiables et basées uniquement sur la base de connaissances ingestée.
 
-*   **Fastify** pour l’API REST
-    
-*   **Qdrant** comme base vectorielle
-    
-*   **HuggingFace Inference API** pour le LLM
-    
-*   **Embeddings HF** pour la recherche de contexte
-    
-*   **RAG (Retrieval-Augmented Generation)** pour des réponses fiables basées sur des données réelles
-    
+**Architecture (résumé)**
+-------------------------
 
-**Architecture Résumée**
+1. Le client envoie une requête à `POST /api/v1/chat`.
+2. Le service récupère le contexte via une recherche vectorielle dans `Qdrant`.
+3. On construit un prompt RAG (FR) contenant les extraits pertinents.
+4. Le prompt est envoyé au LLM via l’API HuggingFace Chat Completions.
+5. Le service renvoie une réponse structurée `{ answer, sources }`.
+
+**Principales fonctionnalités**
+------------------------------
+
+- **Chatbot RAG** : recherche vectorielle, sélection des meilleurs passages, réponse concise basée sur les données.
+- **Ingestion** : route `/api/v1/ingest` pour ajouter des documents (vectorisation via HF embeddings + stockage Qdrant).
+- **Sécurité** : authentification simple par header `x-api-key` sur les routes `api/v1/*`.
+- **Observabilité** : logs structurés (Pino) et endpoint `/metrics` (Prometheus).
+
+**Modèle LLM**
+--------------
+
+Le service est conçu pour utiliser des modèles compatibles avec l’API HuggingFace Chat Completions (ex. `Qwen2.5-7B-Instruct`).
+Avantages : pas d’hébergement de modèle requis, latence faible, bonnes performances en RAG.
+
+Règles du prompt RAG (extrait)
+------------------------------
+
+- Répondre **EXCLUSIVELY** avec les informations fournies dans le contexte.
+- Être concis et professionnel (ton e‑commerce).
+- Si l’information n’existe pas dans le contexte, indiquer clairement qu’on ne sait pas.
+
+Exemple d’encadrement du prompt :
+
+```
+Tu es l'assistant virtuel de ShopyVerse.
+Règles :
+1) Utilise uniquement le CONTEXTE ci-dessous.
+2) Si la réponse n'est pas présente, réponds "Je n'ai pas cette information".
+3) Ne pas inventer d'informations.
+
+===== CONTEXTE =====
+...extraits issus de Qdrant...
+===== FIN CONTEXTE =====
+
+Question du client : ...
+```
+
+Cette structure limite fortement les hallucinations.
+
+**Installation rapide**
+----------------------
+
+Prérequis : `Node.js >= 18`, `Docker` si vous voulez lancer Qdrant localement, et un token HuggingFace.
+
+1) Copier le fichier d'exemple d'environnement :
+
+```bash
+cp .env.example .env
+# Éditez .env pour ajouter HF token, QDRANT url, API key, etc.
+```
+
+2) Installer puis lancer en mode développement :
+
+```bash
+npm install
+npm run dev
+```
+
+L’API démarre par défaut sur le port défini dans la variable d’environnement (par ex. `3001`).
+
+**Variables d’environnement importantes**
+---------------------------------------
+
+- `HF_API_TOKEN` : token HuggingFace
+- `QDRANT_URL` : URL du service Qdrant
+- `API_KEY` : clé API pour protéger les endpoints
+- Consultez ` .env.example` pour la liste complète.
+
+**Endpoints principaux**
 ------------------------
 
-Client → /api/v1/chat
-
-↓
-
-ChatService.processMessage()
-
-→ RetrieverService.search() (Qdrant search)
-
-→ RAG\_PROMPT\_TEMPLATE() (prompt contextualisé FR)
-
-→ llmClient.generate() (HF chatCompletion API)
-
-↓
-
-Réponse finale (answer + sources)Le service supporte également une route d’ingestion pour alimenter la base de connaissances.
-
-**Fonctionnalités**
-===================
-
-### **✓ Chatbot RAG complet**
-
-*   Recherche vectorielle dans Qdrant
-    
-*   Sélection des meilleurs passages (score > 0.4)
-    
-*   Prompt French-Optimized pour Qwen2.5
-    
-*   Réponse concise et strictement basée sur les données ingerées
-    
-
-### **✓ Ingestion de documents**
-
-Via /api/v1/ingest :
-
-*   création automatique de la collection shopyverse\_docs
-    
-*   vectorisation via HuggingFace embeddings
-    
-*   stockage dans Qdrant
-    
-
-### **✓ Authentification simple par API Key**
-
-Toutes les routes /api/v1/\* sont protégées par un header :x-api-key:
-
-### **✓ Observabilité**
-
-*   logs structurés Pino
-    
-*   route /metrics pour export Prometheus
-    
-
-**🤖 Modèle LLM utilisé**
-=========================
-
-Le chatbot utilise :
-
-### **Qwen/Qwen2.5-7B-Instruct**
-
-Modèle compatible **HuggingFace Chat Completions API**, excellent en RAG, multilingue et gratuit via inference-serverless.
-
-Utilisation via chatCompletion :
-
-*   pas besoin d’héberger le modèle
-    
-*   très faible latence (~1s)
-    
-*   réponses stables et non-hallucinées
-    
-
-**RAG PROMPT (optimisé)**
-=========================
-
-Le prompt utilisé force le LLM à :
-
-*   répondre **EXCLUSIVEMENT selon le contexte fourni**
-    
-*   être concis
-    
-*   parler en français
-    
-*   éviter toute hallucination
-    
-*   répondre comme un assistant e-commerce professionnel
-    
-
-Le rendu type :Tu es l’assistant virtuel de ShopyVerse.
-
-Règles strictes :
-
-1\. Utilise EXCLUSIVEMENT les informations ci-dessous.
-
-2\. Si la réponse n’est pas présente, dis-le simplement.
-
-3\. N’invente jamais d’informations.
-
-\===== CONTEXTE =====
-
-...
-
-\===== FIN CONTEXTE =====
-
-Question du client :
-
-...
-
-**Installation & Lancement**
-============================
-
-**1\. Dépendances**
--------------------
-
-*   Node.js 18+
-    
-*   Qdrant (Docker ou local)
-    
-*   HuggingFace account + Access Token
-    
-
-**2. .env requis
----------------------------
-
-*  Checker le .env.example
-
-**3\. Installer & lancer :**
-----------------------------
-
-**npm install**
----------------
-
-**npm run dev**
----------------
-
-**Ingestion de documents (FAQ / connaissance)**
-===============================================
-
-Appeler :curl -X POST http://localhost:3001/api/v1/ingest \\
-
-\-H "Content-Type: application/json" \\
-
-\-H "x-api-key: dev-api-key" \\
-
-\-d '{
-
-"documents": \[
-
-{
-
-"content": "Nos délais de livraison sont de 3 à 5 jours ouvrés en France.",
-
-"metadata": { "topic": "livraison" }
-
-}
-
-\]
-
-}'
-
-**Exemple d’appel au chatbot**
-==============================
-
-curl -X POST http://localhost:3001/api/v1/chat \\
-
-\-H "Content-Type: application/json" \\
-
-\-H "x-api-key: dev-api-key" \\
-
-\-d '{"message": "Bonjour, quels sont vos délais de livraison ?"}'Réponse :{
-
-"answer": "Les délais de livraison sont de 3 à 5 jours ouvrés en France métropolitaine.",
-
-"sources": \[
-
-{ "title": "livraison", "text": "Nos délais de livraison..." }
-
-\]
-
-}
-
-**Améliorations prévues (roadmap interne)**
-===========================================
-
-*   Historique conversationnel (sessionId)
-    
-*   Recommandation produit via tool-calling
-    
-*   Reranker HF pour améliorer la pertinence RAG
-    
-*   Monitoring avancé
-    
-*   Dockerfile + Helm Chart + CI/CD GitHub Actions
-    
-*   Widget chat côté front
+- `POST /api/v1/ingest` — ingérer un ou plusieurs documents (JSON).
+- `POST /api/v1/chat` — envoyer un message utilisateur et recevoir `{ answer, sources }`.
+- `GET /metrics` — métriques Prometheus.
+
+Exemple : ingestion (FAQ)
+
+```bash
+curl -s -X POST http://localhost:3001/api/v1/ingest \
+	-H "Content-Type: application/json" \
+	-H "x-api-key: dev-api-key" \
+	-d '{
+		"documents": [
+			{
+				"content": "Nos délais de livraison sont de 3 à 5 jours ouvrés en France.",
+				"metadata": { "topic": "livraison" }
+			}
+		]
+	}'
+```
+
+Exemple : appel au chatbot
+
+```bash
+curl -s -X POST http://localhost:3001/api/v1/chat \
+	-H "Content-Type: application/json" \
+	-H "x-api-key: dev-api-key" \
+	-d '{"message": "Bonjour, quels sont vos délais de livraison ?"}'
+
+# Réponse attendue (exemple):
+// {
+//   "answer": "Les délais de livraison sont de 3 à 5 jours ouvrés en France métropolitaine.",
+//   "sources": [ { "title": "livraison", "text": "Nos délais de livraison..." } ]
+// }
+```
+
+**Roadmap (brefs points)**
+--------------------------
+
+- Historique conversationnel (sessionId)
+- Recommandation produit via tool-calling
+- Reranker HuggingFace pour améliorer la pertinence
+- Monitoring & alerting avancés
+- Docker image, Helm chart et CI/CD (GitHub Actions)
+- Widget chat côté front
+
+**Contribuer / développement**
+-----------------------------
+
+- Lancer en local : `npm run dev`.
+- Ajouter des documents via `/api/v1/ingest` pour tester les scénarios RAG.
+- Ouvrir une PR sur la branche `main` pour proposer des améliorations.
+
+---
+
+Si vous souhaitez que je reformule certains paragraphes (ex. prompt RAG, guide d’ingestion, ou section technique), dites-moi laquelle et je l’affinerai.
