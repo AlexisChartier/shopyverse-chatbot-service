@@ -9,10 +9,14 @@ export class ChatService {
     // 1. Recherche du contexte pertinent (RAG)
     // On cherche les 3 meilleurs documents
     const sources = await retrieverService.search(userMessage, 3);
+
+    console.log("RAW SOURCES:", sources);
     
-    // Filtrage simple : on ignore les résultats trop peu pertinents (score < 0.5 par exemple)
+    // Filtrage des sources pertinentes par score
     // Note : Le seuil dépend du modèle d'embedding et de la distance (Cosine vs Euclidien)
-    const relevantSources = sources.filter(s => s.score > 0.4);
+    const relevantSources = sources
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
 
     let answer = "";
 
