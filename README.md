@@ -140,35 +140,10 @@ Question du client :
 *   HuggingFace account + Access Token
     
 
-**2. .env requisPORT=3001**
+**2. .env requis
 ---------------------------
 
-**\# HuggingFace**
-------------------
-
-**HF\_TOKEN=hf\_xxxxx**
------------------------
-
-**HF\_MODEL=Qwen/Qwen2.5-7B-Instruct**
---------------------------------------
-
-**\# Qdrant**
--------------
-
-**QDRANT\_URL=http://localhost:6333**
--------------------------------------
-
-**\# API security**
--------------------
-
-**API\_KEY=dev-api-key**
-------------------------
-
-**\# Core services**
---------------------
-
-**API\_CORE\_URL=http://localhost:3000**
-----------------------------------------
+*  Checker le .env.example
 
 **3\. Installer & lancer :**
 ----------------------------
