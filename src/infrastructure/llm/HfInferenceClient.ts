@@ -1,4 +1,3 @@
-// src/infrastructure/llm/HfInferenceClient.ts
 import { InferenceClient } from "@huggingface/inference";
 import { config } from "../config/env.js"; // adapte le chemin si besoin
 
