@@ -62,3 +62,13 @@ Thumbs.db
 *.db
 *.log.*
 coverage/
+
+# Qdrant vector DB
+qdrant_data/
+*.wal
+*.dat
+*.index
+*.fdb
+*.db
+*.snapshot
+*.tmp
