@@ -3,6 +3,9 @@ import { HfInference } from '@huggingface/inference';
 export class HfEmbeddings {
   private hf: HfInference;
 
+   public readonly dimension = 384; 
+   public readonly modelId = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2';
+
   constructor() {
     this.hf = new HfInference(process.env.HF_ACCESS_TOKEN);
   }

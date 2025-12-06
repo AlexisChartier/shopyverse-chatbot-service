@@ -3,6 +3,7 @@ import { retrieverService } from "../retriever/retrieveContext.js";
 import { llmClient, type ChatMessage } from "../../infrastructure/llm/HfInferenceClient.js";
 import { RAG_PROMPT_TEMPLATE } from "../../prompts/rag.fr.js";
 import { intentDetector, type Intent } from "../../nlu/intentDetector.js";
+import { productRetrieverService } from "../products/productRetriever.js";
 
 type SourceOut = { title: string; text: string; score?: number };
 
@@ -135,32 +136,62 @@ export class ChatService {
   }
 
   private async handleProductSearch(
-    userMessage: string,
-    sessionId: string,
-    history: ChatMessage[]
+  userMessage: string,
+  sessionId: string,
+  history: ChatMessage[]
   ): Promise<ChatResponse> {
-    // Pour l'instant stub : on n'a pas encore de produits ou de service catalogue.
-    // On crée quand même un point d'extension clairement identifié.
+  // 1) Recherche sémantique produit
+  const results = await productRetrieverService.search(userMessage, 5);
 
+  if (!results.length) {
     const answer =
       "Vous semblez chercher un produit précis. " +
-      "La recherche de produits par le chatbot n'est pas encore disponible, " +
-      "mais elle sera bientôt intégrée avec le catalogue ShopyVerse.";
+      "Je ne trouve pas encore de produit correspondant dans le catalogue indexé. " +
+      "Vous pouvez reformuler votre demande ou consulter les catégories directement sur ShopyVerse.";
 
     const updatedHistory: ChatMessage[] = [
       ...history,
       { role: "user", content: userMessage },
-      { role: "assistant", content: answer }
+      { role: "assistant", content: answer },
     ];
     this.sessions.set(sessionId, updatedHistory);
 
-    // Plus tard : ici on branchera un appel au microservice produits (via HTTP)
-    // et on renverra une liste de recommandations.
-
     return {
       answer,
-      sources: [], 
-      sessionId
+      sources: [],
+      sessionId,
+    };
+  }
+
+  // 2) On garde les 3 meilleurs
+  const TOP_K = 3;
+  const topResults = results.slice(0, TOP_K);
+
+  const lines = topResults.map((p, idx) => {
+    const cat = p.categoryName ? ` (${p.categoryName})` : "";
+    return `${idx + 1}. ${p.title}${cat} — ${p.description}`;
+  });
+
+  const answer =
+    "Voici quelques produits ShopyVerse qui pourraient vous intéresser :\n\n" +
+    lines.join("\n");
+
+  const updatedHistory: ChatMessage[] = [
+    ...history,
+    { role: "user", content: userMessage },
+    { role: "assistant", content: answer },
+  ];
+  this.sessions.set(sessionId, updatedHistory);
+
+  // On peut retourner les produits en "sources" pour le front s'il veut les exploiter
+  return {
+      answer,
+      sources: topResults.map((p) => ({
+        title: p.title,
+        text: p.description,
+        score: p.score,
+      })),
+      sessionId,
     };
   }
 
