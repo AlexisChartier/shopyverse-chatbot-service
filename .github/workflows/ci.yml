@@ -95,15 +95,17 @@ jobs:
 
       - name: Wait for Qdrant to be ready
         run: |
-          for i in {1..30}; do
-            if curl -f http://localhost:6333/health 2>/dev/null; then
+          for i in {1..60}; do
+            if timeout 2 bash -c "echo >/dev/tcp/localhost/6333" 2>/dev/null; then
               echo "Qdrant is ready"
+              sleep 2
               exit 0
             fi
-            echo "Waiting for Qdrant... ($i/30)"
+            echo "Waiting for Qdrant... ($i/60)"
             sleep 2
           done
-          echo "Qdrant failed to start"
+          echo "Qdrant failed to start after 120 seconds"
+          docker ps
           exit 1
 
       - name: Run unit tests with coverage
@@ -240,6 +242,29 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for PostgreSQL..."
+          for i in {1..30}; do
+            if timeout 2 bash -c "echo >/dev/tcp/localhost/5432" 2>/dev/null; then
+              echo "PostgreSQL is ready"
+              break
+            fi
+            echo "Waiting for PostgreSQL... ($i/30)"
+            sleep 2
+          done
+          
+          echo "Waiting for Qdrant..."
+          for i in {1..60}; do
+            if timeout 2 bash -c "echo >/dev/tcp/localhost/6333" 2>/dev/null; then
+              echo "Qdrant is ready"
+              sleep 2
+              break
+            fi
+            echo "Waiting for Qdrant... ($i/60)"
+            sleep 2
+          done
 
       - name: Start service
         env:
