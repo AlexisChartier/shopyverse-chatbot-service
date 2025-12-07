@@ -1,0 +1,150 @@
+# Default Helm values for chatbot-service
+# Override per environment via values-{env}.yaml
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/AlexisChartier/shopyverse-chatbot-service
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "3001"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3001
+  annotations: {}
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+  hosts:
+    - host: chatbot.shopyverse.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: chatbot-tls
+      hosts:
+        - chatbot.shopyverse.local
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - chatbot-service
+          topologyKey: kubernetes.io/hostname
+
+livenessProbe:
+  httpGet:
+    path: /metrics
+    port: 3001
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /metrics
+    port: 3001
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Environment variables per environment
+env:
+  LOG_LEVEL: info
+  NODE_ENV: production
+
+# Secrets (referenced from K8s Secrets)
+secrets:
+  - name: HF_ACCESS_TOKEN
+    key: hf-access-token
+  - name: API_KEY
+    key: api-key
+
+# External services
+externalServices:
+  postgres:
+    host: postgres.default.svc.cluster.local
+    port: 5432
+    database: chatbot_db
+    user: chatbot
+  qdrant:
+    host: qdrant.default.svc.cluster.local
+    port: 6333
+
+# Deployment strategy
+deploymentStrategy: "rolling"  # rolling, canary, blue-green
+
+# Database migration
+migrations:
+  enabled: true
+  image: postgres:15-alpine
+
+# Monitoring
+monitoring:
+  enabled: true
+  prometheusPort: 3001
+  metricsPath: /metrics
+
+# Service mesh (optional)
+serviceMesh:
+  enabled: false
+  provider: "istio"  # istio or linkerd
