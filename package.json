@@ -8,7 +8,10 @@
     "build": "tsc",
     "start": "node dist/app/server.js",
     "dev": "nodemon --watch \"src/**/*.ts\" --exec \"node --loader ts-node/esm\" src/app/server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test:unit": "NODE_OPTIONS=--experimental-vm-modules jest --config ./jest.config.cjs",
+    "test:e2e": "node ./tests/e2e/run-e2e.js",
+    "test:all": "npm run test:unit && npm run test:e2e",
+    "load:test": "node ./scripts/load-test.js"
   },
   "keywords": [],
   "author": "",
@@ -33,6 +36,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^24.10.1",
     "@types/pg": "^8.15.6",
+    "autocannon": "^7.14.0",
     "jest": "^30.2.0",
     "nodemon": "^3.1.11",
     "ts-jest": "^29.4.5",
