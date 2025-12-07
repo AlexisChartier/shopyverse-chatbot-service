@@ -72,3 +72,10 @@ qdrant_data/
 *.db
 *.snapshot
 *.tmp
+
+# postgres data
+postgres_data/
+*.backup
+*.dump
+*.sql
+

@@ -7,6 +7,8 @@ import { authMiddleware } from './middlewares/auth.js';
 import { chatRoute } from './routes/chat.route.js';
 import { ingestRoute } from './routes/ingest.route.js';
 import { metricsRoute } from './routes/metrics.route.js';
+import { adminRoute } from "./routes/admin.route.js";
+import { db } from '../infrastructure/db/pgClient.js';
 
 const server = Fastify({
   logger: {
@@ -27,6 +29,15 @@ const server = Fastify({
 await server.register(cors, { origin: '*' }); // A restreindre en prod
 await server.register(helmet);
 
+// Initialize PostgreSQL connection pool and create schema
+try {
+  await db.initDb();
+  console.log("📦 Database connected and schema initialized");
+} catch (err) {
+  console.error("❌ Database initialization error:", err);
+  process.exit(1);
+}
+
 // Middlewares globaux
 server.addHook('onRequest', requestContextMiddleware);
 
@@ -42,6 +53,7 @@ server.register(async (v1) => {
   // Routes métier
   await v1.register(chatRoute);
   await v1.register(ingestRoute);
+  await v1.register(adminRoute, { prefix: "/admin" });
 }, { prefix: '/api/v1' });
 
 // Démarrage
@@ -54,5 +66,20 @@ const start = async () => {
     process.exit(1);
   }
 };
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Shutting down gracefully...');
+  await db.closeDb();
+  await server.close();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('\n🛑 Shutting down gracefully...');
+  await db.closeDb();
+  await server.close();
+  process.exit(0);
+});
 
 start();
