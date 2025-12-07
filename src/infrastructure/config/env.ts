@@ -21,6 +21,9 @@ const envSchema = z.object({
 
   // Model (optional override)
   HF_MODEL: z.string().optional(),
+
+  // Database
+  CHATBOT_DB_URL: z.string().min(1, "CHATBOT_DB_URL est requis pour la connexion à la base de données"),
 });
 
 // Validation

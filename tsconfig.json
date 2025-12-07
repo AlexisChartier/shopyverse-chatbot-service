@@ -1,15 +1,17 @@
 {
   "compilerOptions": {
-    "target": "ES2022",             // Cible moderne
-    "module": "NodeNext",           // Indispensable pour le "type": "module"
-    "moduleResolution": "NodeNext", // Indispensable pour le "type": "module"
-    "verbatimModuleSyntax": true,   // L'option qui causait l'erreur (gardez-la à true)
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "verbatimModuleSyntax": true,
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules"]
