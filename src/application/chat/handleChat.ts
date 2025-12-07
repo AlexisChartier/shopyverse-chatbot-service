@@ -1,5 +1,6 @@
 import { retrieverService } from "../retriever/retrieveContext.js";
 import { llmClient, type ChatMessage } from "../../infrastructure/llm/HfInferenceClient.js";
+import { bgeReranker } from "../../infrastructure/llm/BgeReranker.js";
 import { RAG_PROMPT_TEMPLATE } from "../../prompts/rag.fr.js";
 import { intentDetector, type Intent } from "../../nlu/intentDetector.js";
 import { productRetrieverService } from "../products/productRetriever.js";
@@ -120,8 +121,26 @@ export class ChatService {
       return { answer, sources: [], sessionId };
     }
 
-    // === Cas normal : RAG + LLM ===
-    const contextText = relevantSources.map((s) => `- ${s.content}`).join("\n");
+    // === Cas normal : RAG + LLM avec BGE Reranking ===
+    // Step 1: Rerank candidates using BGE reranker to improve quality
+    console.log(
+      `FAQ: applying BGE reranker on ${relevantSources.length} sources before LLM call`
+    );
+
+    const rerankedResults = await bgeReranker.rerank(
+      userMessage,
+      relevantSources.map((s) => s.content),
+      Math.min(3, relevantSources.length) // Keep top 3 after reranking
+    );
+
+    // Step 2: Map reranked results back to source objects with new scores
+    const finalSources = rerankedResults.map((reranked) => ({
+      ...relevantSources[reranked.index],
+      score: reranked.score, // Update score from reranker
+    }));
+
+    // Step 3: Build context from reranked sources
+    const contextText = finalSources.map((s) => `- ${s.content}`).join("\n");
     const ragPrompt = RAG_PROMPT_TEMPLATE(contextText, userMessage);
 
     const systemMessage: ChatMessage = {
@@ -140,7 +159,7 @@ export class ChatService {
     ];
 
     console.log(
-      `FAQ: appel du LLM avec ${relevantSources.length} sources, bestScore=${bestScore}, sessionId=${sessionId}`
+      `FAQ: appel du LLM avec ${finalSources.length} reranked sources, sessionId=${sessionId}`
     );
 
     const answer = await llmClient.generate(messages);
@@ -167,10 +186,10 @@ export class ChatService {
 
     return {
       answer,
-      sources: relevantSources.map((s) => ({
+      sources: finalSources.map((s) => ({
         title: s.metadata.topic || "Document",
         text: s.content,
-        score: s.score
+        score: s.score // Now reranker score instead of embedding score
       })),
       sessionId
     };
