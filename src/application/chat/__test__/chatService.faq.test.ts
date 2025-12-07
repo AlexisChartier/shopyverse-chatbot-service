@@ -67,7 +67,7 @@ describe('ChatService FAQ flow with reranker', () => {
     ]);
 
     mockRerank.mockResolvedValue([
-      { id: '1', text: 'doc bruit', score: 0.01 }, // en-dessous du seuil
+      { id: '1', text: 'doc bruit', score: 0.01 }, 
     ]);
 
     const res = await chatService.processMessage(

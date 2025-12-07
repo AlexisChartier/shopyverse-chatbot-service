@@ -229,26 +229,411 @@ curl -s -X POST http://localhost:3001/api/v1/ingest/products \
 
 Ces produits seront vectorisés et indexés pour la recherche sémantique (ex. "je cherche un t-shirt confortable pour homme").
 
-**Widget front-end**
---------------------
+**Frontend Integration (React TypeScript)**
+------------------------------------------
 
-Le widget sera intégrable en tant qu'iframe ou Web Component. Exemple :
+### Setup
+
+To integrate the chatbot service into your React TypeScript frontend, follow these steps:
+
+#### 1. Install Dependencies
+
+```bash
+npm install axios # or your preferred HTTP client
+```
+
+#### 2. Create a Chatbot Service Client
+
+Create a file `src/services/chatbotClient.ts` in your React app:
+
+```typescript
+import axios, { AxiosInstance } from 'axios';
+
+interface ChatMessage {
+  message: string;
+}
+
+interface ChatResponse {
+  answer: string;
+  sources?: Array<{
+    title: string;
+    text: string;
+  }>;
+  products?: Array<{
+    id: string;
+    name: string;
+    price?: number;
+  }>;
+  recommendations?: string[];
+}
+
+class ChatbotClient {
+  private apiClient: AxiosInstance;
+  private apiKey: string;
+
+  constructor(baseURL: string, apiKey: string) {
+    this.apiKey = apiKey;
+    this.apiClient = axios.create({
+      baseURL,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+    });
+  }
+
+  /**
+   * Send a message to the chatbot and get a response
+   */
+  async sendMessage(message: string): Promise<ChatResponse> {
+    try {
+      const response = await this.apiClient.post<ChatResponse>(
+        '/api/v1/chat',
+        { message }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Chatbot API error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get conversation metrics (optional)
+   */
+  async getMetrics(): Promise<any> {
+    try {
+      const response = await this.apiClient.get('/metrics');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch metrics:', error);
+      throw error;
+    }
+  }
+}
+
+// Create a singleton instance
+const chatbotClient = new ChatbotClient(
+  process.env.REACT_APP_CHATBOT_API_URL || 'http://localhost:3001',
+  process.env.REACT_APP_CHATBOT_API_KEY || 'dev-api-key'
+);
+
+export default chatbotClient;
+```
+
+#### 3. Create Environment Variables
+
+In your React project's `.env` file:
+
+```bash
+REACT_APP_CHATBOT_API_URL=http://localhost:3001
+REACT_APP_CHATBOT_API_KEY=dev-api-key
+```
+
+For production, set these in your deployment environment variables.
+
+#### 4. Create a React Hook for Chat
+
+Create `src/hooks/useChatbot.ts`:
+
+```typescript
+import { useState, useCallback } from 'react';
+import chatbotClient from '../services/chatbotClient';
+
+interface ChatResponse {
+  answer: string;
+  sources?: Array<{
+    title: string;
+    text: string;
+  }>;
+  products?: Array<{
+    id: string;
+    name: string;
+    price?: number;
+  }>;
+}
+
+interface UseChatbotReturn {
+  sendMessage: (message: string) => Promise<ChatResponse | null>;
+  response: ChatResponse | null;
+  loading: boolean;
+  error: string | null;
+}
+
+export const useChatbot = (): UseChatbotReturn => {
+  const [response, setResponse] = useState<ChatResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const sendMessage = useCallback(async (message: string) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await chatbotClient.sendMessage(message);
+      setResponse(result);
+      return result;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMessage);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return { sendMessage, response, loading, error };
+};
+```
+
+#### 5. Create a Chat Widget Component
+
+Create `src/components/ChatWidget.tsx`:
+
+```typescript
+import React, { useState } from 'react';
+import { useChatbot } from '../hooks/useChatbot';
+
+interface Message {
+  id: string;
+  type: 'user' | 'bot';
+  content: string;
+  sources?: any[];
+}
+
+export const ChatWidget: React.FC = () => {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const { sendMessage, loading, error } = useChatbot();
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!input.trim()) return;
+
+    // Add user message to chat
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      type: 'user',
+      content: input,
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput('');
+
+    // Send to chatbot
+    const response = await sendMessage(input);
+
+    if (response) {
+      const botMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'bot',
+        content: response.answer,
+        sources: response.sources,
+      };
+      setMessages((prev) => [...prev, botMessage]);
+    } else if (error) {
+      const errorMessage: Message = {
+        id: (Date.now() + 2).toString(),
+        type: 'bot',
+        content: `Erreur: ${error}`,
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    }
+  };
+
+  return (
+    <div className="chat-widget" style={styles.container}>
+      <div style={styles.header}>
+        <h3>ShopyVerse Assistant</h3>
+      </div>
+
+      <div style={styles.messagesContainer}>
+        {messages.map((msg) => (
+          <div
+            key={msg.id}
+            style={{
+              ...styles.message,
+              ...(msg.type === 'user' ? styles.userMessage : styles.botMessage),
+            }}
+          >
+            <p>{msg.content}</p>
+            {msg.sources && msg.sources.length > 0 && (
+              <div style={styles.sources}>
+                <strong>Sources:</strong>
+                <ul>
+                  {msg.sources.map((source, idx) => (
+                    <li key={idx}>{source.title}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ))}
+        {loading && <div style={styles.loading}>Chargement...</div>}
+      </div>
+
+      <form onSubmit={handleSendMessage} style={styles.form}>
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Posez votre question..."
+          disabled={loading}
+          style={styles.input}
+        />
+        <button type="submit" disabled={loading} style={styles.button}>
+          Envoyer
+        </button>
+      </form>
+    </div>
+  );
+};
+
+const styles = {
+  container: {
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    width: '400px',
+    height: '600px',
+    border: '1px solid #ccc',
+    borderRadius: '8px',
+    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+    backgroundColor: '#fff',
+  },
+  header: {
+    backgroundColor: '#007bff',
+    color: '#fff',
+    padding: '16px',
+    borderRadius: '8px 8px 0 0',
+    textAlign: 'center' as const,
+  },
+  messagesContainer: {
+    flex: 1,
+    overflowY: 'auto' as const,
+    padding: '16px',
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    gap: '12px',
+  },
+  message: {
+    marginBottom: '8px',
+    padding: '12px',
+    borderRadius: '8px',
+    maxWidth: '80%',
+  },
+  userMessage: {
+    alignSelf: 'flex-end' as const,
+    backgroundColor: '#007bff',
+    color: '#fff',
+  },
+  botMessage: {
+    alignSelf: 'flex-start' as const,
+    backgroundColor: '#f0f0f0',
+    color: '#333',
+  },
+  sources: {
+    marginTop: '8px',
+    fontSize: '12px',
+    opacity: 0.8,
+  },
+  loading: {
+    padding: '12px',
+    textAlign: 'center' as const,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  form: {
+    display: 'flex' as const,
+    gap: '8px',
+    padding: '16px',
+    borderTop: '1px solid #ccc',
+  },
+  input: {
+    flex: 1,
+    padding: '8px 12px',
+    border: '1px solid #ccc',
+    borderRadius: '4px',
+    fontSize: '14px',
+  },
+  button: {
+    padding: '8px 16px',
+    backgroundColor: '#007bff',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '14px',
+  },
+};
+```
+
+#### 6. Use the Chat Widget in Your App
+
+In your main `App.tsx`:
+
+```typescript
+import React from 'react';
+import { ChatWidget } from './components/ChatWidget';
+
+function App() {
+  return (
+    <div className="App">
+      {/* Your other components */}
+      <ChatWidget />
+    </div>
+  );
+}
+
+export default App;
+```
+
+### CORS Configuration
+
+If your React app and chatbot service are on different origins (e.g., `localhost:3000` and `localhost:3001`), you need to enable CORS on the chatbot service.
+
+The service already includes `@fastify/cors`. If you need to configure it, update `src/app/server.ts`:
+
+```typescript
+// Already configured for development, adjust for production
+await fastify.register(require('@fastify/cors'), {
+  origin: ['http://localhost:3000', 'https://yourdomain.com'],
+  credentials: true,
+});
+```
+
+### Example: Full Integration Flow
+
+1. User enters a message in the chat widget
+2. `handleSendMessage` sends the message via `useChatbot` hook
+3. `chatbotClient.sendMessage()` makes a POST request to `/api/v1/chat`
+4. Chatbot service classifies the intent, retrieves context, and returns an answer
+5. Response is displayed in the chat widget with sources/products
+6. User sees the answer and can continue the conversation
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| **CORS error** | Ensure the backend CORS config includes your frontend origin |
+| **API Key rejection** | Check that `REACT_APP_CHATBOT_API_KEY` matches the backend's `API_KEY` |
+| **500 error from chatbot** | Check chatbot service logs: `docker logs <container>` or `npm run dev` output |
+| **Network timeout** | Verify the `REACT_APP_CHATBOT_API_URL` is correct and backend is running |
+
+**Widget front-end (Optional Iframe)**
+--------------------------------------
+
+Alternatively, for a standalone widget deployed as an iframe:
 
 ```html
-<!-- Iframe simple -->
+<!-- In your e-commerce site -->
 <iframe 
   src="https://api.shopyverse.com/chat-widget" 
   width="400" 
   height="600"
-  frameborder="0">
+  frameborder="0"
+  allow="scripts">
 </iframe>
-
-<!-- Ou Web Component (plus flexible) -->
-<script src="https://api.shopyverse.com/chat-widget.js"></script>
-<shopyverse-chat apiKey="dev-api-key"></shopyverse-chat>
 ```
-
-Le widget communiquera avec le backend via WebSocket ou polling HTTP.
 
 **Dashboard IA & Logs**
 ----------------------
