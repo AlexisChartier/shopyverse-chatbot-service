@@ -47,10 +47,11 @@ jobs:
           output: 'trivy-results.sarif'
 
       - name: Upload Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
+          wait-for-processing: false
 
   unit-tests:
     name: Unit Tests
@@ -76,9 +77,9 @@ jobs:
         ports:
           - 6333:6333
         options: >-
-          --health-cmd "wget --quiet --tries=1 --spider http://localhost:6333/health || exit 1"
+          --health-cmd "curl -f http://localhost:6333/health || exit 1"
           --health-interval 10s
-          --health-timeout 5s
+          --health-timeout 10s
           --health-retries 5
 
     steps:
@@ -184,10 +185,11 @@ jobs:
         continue-on-error: true
 
       - name: Upload Trivy image scan results
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-image-results.sarif'
+          wait-for-processing: false
 
   e2e-smoke-tests:
     name: E2E Smoke Tests
