@@ -50,11 +50,12 @@ jobs:
           output: 'trivy-results.sarif'
 
       - name: Upload Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
           wait-for-processing: false
+        continue-on-error: true
 
   unit-tests:
     name: Unit Tests
@@ -114,7 +115,7 @@ jobs:
           QDRANT_URL: http://localhost:6333
           HF_ACCESS_TOKEN: ${{ secrets.HF_ACCESS_TOKEN }}
           API_KEY: test-key
-        run: npm run test:unit -- --coverage --coverage-reporters=json --coverage-reporters=text
+        run: npm run test:unit -- --coverage --coverage-reporters=json --coverage-reporters=json-summary --coverage-reporters=text
 
       - name: Upload coverage to Codecov (optional)
         uses: codecov/codecov-action@v3
@@ -126,8 +127,12 @@ jobs:
 
       - name: Fail if coverage < 70%
         run: |
-          COVERAGE=$(cat coverage/coverage-summary.json | grep -o '"lines"[^}]*' | grep -o '[0-9.]*' | head -1)
-          echo "Line coverage: $COVERAGE%"
+          if [ ! -f coverage/coverage-summary.json ]; then
+            echo "Coverage summary not found!"
+            exit 1
+          fi
+          COVERAGE=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
+          echo "Line coverage: ${COVERAGE}%"
           if (( $(echo "$COVERAGE < 70" | bc -l) )); then
             echo "Coverage below 70% threshold!"
             exit 1
@@ -140,6 +145,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write
     
     steps:
       - name: Checkout code
@@ -177,19 +183,25 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Generate SBOM (cyclonedx format)
-        uses: CycloneDX/cyclonedx-npm-plugin@v3.0
+      - name: Generate SBOM with Syft
+        uses: anchore/sbom-action@v0
         with:
+          path: .
+          format: cyclonedx-json
           output-file: sbom.json
-          output-format: json
+        continue-on-error: true
 
       - name: Upload SBOM as artifact
-        uses: actions/upload-artifact@v3
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: sbom
           path: sbom.json
+          retention-days: 30
+        continue-on-error: true
 
       - name: Scan Docker image with Trivy
+        id: trivy-scan
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
@@ -198,17 +210,18 @@ jobs:
         continue-on-error: true
 
       - name: Upload Trivy image scan results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        if: hashFiles('trivy-image-results.sarif') != ''
         with:
           sarif_file: 'trivy-image-results.sarif'
           wait-for-processing: false
+        continue-on-error: true
 
   e2e-smoke-tests:
     name: E2E Smoke Tests
     runs-on: ubuntu-latest
     needs: build-image
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     
     services:
       postgres:
