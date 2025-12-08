@@ -1,0 +1,13 @@
+apiVersion: v2
+name: chatbot-service
+description: ShopyVerse Chatbot Service Helm Chart
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - chatbot
+  - rag
+  - kubernetes
+maintainers:
+  - name: ShopyVerse Team
+    email: devops@shopyverse.com

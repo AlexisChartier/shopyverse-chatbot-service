@@ -1,0 +1,48 @@
+# Staging environment overrides
+replicaCount: 2
+
+image:
+  tag: "main-latest"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+ingress:
+  hosts:
+    - host: chatbot-staging.shopyverse.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: chatbot-staging-tls
+      hosts:
+        - chatbot-staging.shopyverse.com
+
+env:
+  LOG_LEVEL: info
+  NODE_ENV: staging
+
+deploymentStrategy: "canary"
+
+externalServices:
+  postgres:
+    host: postgres-staging.default.svc.cluster.local
+  qdrant:
+    host: qdrant-staging.default.svc.cluster.local
+
+# Canary deployment config
+canary:
+  steps: 2
+  weight: 50  # Initial traffic weight percentage
+  pause: 5m   # Pause duration between steps
