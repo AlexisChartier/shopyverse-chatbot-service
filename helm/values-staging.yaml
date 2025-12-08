@@ -103,6 +103,11 @@ externalServices:
     host: qdrant-staging.default.svc.cluster.local
     port: 6333
 
+secrets:
+  hfAccessToken: "replace-me"
+  apiKey: "staging-api-key"
+  dbPassword: "chatbot"
+
 # Canary deployment config
 canary:
   steps: 2

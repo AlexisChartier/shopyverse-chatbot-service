@@ -58,7 +58,7 @@ jobs:
       - name: Deploy using Helm
         env:
           ENVIRONMENT: dev
-          IMAGE_TAG: latest
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
           REPLICAS: 1
         run: |
           helm upgrade --install chatbot-service ./helm/chatbot-service \
@@ -66,6 +66,9 @@ jobs:
             --values ./helm/values-dev.yaml \
             --set image.tag=$IMAGE_TAG \
             --set replicaCount=$REPLICAS \
+            --set-string secrets.hfAccessToken="${{ secrets.HF_ACCESS_TOKEN }}" \
+            --set-string secrets.apiKey="dev-api-key" \
+            --set-string secrets.dbPassword="chatbot" \
             --wait --timeout 5m || true
 
       - name: Debug deployment status
@@ -186,7 +189,7 @@ jobs:
       - name: Deploy using Helm with canary strategy
         env:
           ENVIRONMENT: staging
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
           REPLICAS: 2
         run: |
           helm upgrade --install chatbot-service ./helm/chatbot-service \
@@ -195,6 +198,9 @@ jobs:
             --set image.tag=$IMAGE_TAG \
             --set replicaCount=$REPLICAS \
             --set deploymentStrategy=canary \
+            --set-string secrets.hfAccessToken="${{ secrets.HF_ACCESS_TOKEN }}" \
+            --set-string secrets.apiKey="staging-api-key" \
+            --set-string secrets.dbPassword="chatbot" \
             --wait --timeout 5m
 
       - name: Verify deployment health
@@ -269,6 +275,9 @@ jobs:
             --set image.tag=$IMAGE_TAG \
             --set replicaCount=$REPLICAS \
             --set deploymentStrategy=blue-green \
+            --set-string secrets.hfAccessToken="${{ secrets.HF_ACCESS_TOKEN }}" \
+            --set-string secrets.apiKey="prod-api-key" \
+            --set-string secrets.dbPassword="chatbot" \
             --wait --timeout 15m
 
       - name: Verify production deployment

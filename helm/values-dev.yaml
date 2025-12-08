@@ -92,3 +92,8 @@ externalServices:
     host: postgres-dev.default.svc.cluster.local
   qdrant:
     host: qdrant-dev.default.svc.cluster.local
+
+secrets:
+  hfAccessToken: "replace-me"
+  apiKey: "dev-api-key"
+  dbPassword: "chatbot"

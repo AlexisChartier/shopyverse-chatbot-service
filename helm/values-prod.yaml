@@ -108,6 +108,11 @@ externalServices:
     port: 6333
   failureThreshold: 3
 
+secrets:
+  hfAccessToken: "replace-me"
+  apiKey: "prod-api-key"
+  dbPassword: "chatbot"
+
 deploymentStrategy: "blue-green"
 
 externalServices:
