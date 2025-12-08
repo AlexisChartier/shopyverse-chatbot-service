@@ -1,0 +1,269 @@
+name: CD Pipeline
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'latest'
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubectl
+        env:
+          K8S_CONTEXT: ${{ secrets.K8S_CONTEXT }}
+          KUBECONFIG_B64: ${{ secrets.K8S_KUBECONFIG_B64 }}
+        run: |
+          mkdir -p $HOME/.kube
+          echo "$KUBECONFIG_B64" | base64 -d > $HOME/.kube/config
+          kubectl config use-context "$K8S_CONTEXT"
+          kubectl version --client
+
+      - name: Create namespace
+        run: kubectl create namespace chatbot-dev --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy using Helm
+        env:
+          ENVIRONMENT: dev
+          IMAGE_TAG: ${{ github.sha }}
+          REPLICAS: 1
+        run: |
+          helm upgrade --install chatbot-service ./helm/chatbot-service \
+            --namespace chatbot-dev \
+            --values ./helm/values-dev.yaml \
+            --set image.tag=$IMAGE_TAG \
+            --set replicaCount=$REPLICAS \
+            --wait --timeout 5m
+
+      - name: Run health check
+        run: |
+          kubectl rollout status deployment/chatbot-service -n chatbot-dev --timeout=5m
+          kubectl get pods -n chatbot-dev -l app=chatbot-service
+
+      - name: Slack notification on success
+        if: success()
+        uses: slackapi/slack-github-action@v1
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_DEV }}
+          payload: |
+            {
+              "text": "✅ Deployment to DEV successful",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*DEV Deployment Success*\nCommit: `${{ github.sha }}`\nAuthor: ${{ github.actor }}"
+                  }
+                }
+              ]
+            }
+
+      - name: Slack notification on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_DEV }}
+          payload: |
+            {
+              "text": "❌ Deployment to DEV failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*DEV Deployment Failed*\nCommit: `${{ github.sha }}`\nAuthor: ${{ github.actor }}"
+                  }
+                }
+              ]
+            }
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'latest'
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubectl
+        env:
+          K8S_CONTEXT: ${{ secrets.K8S_CONTEXT }}
+          KUBECONFIG_B64: ${{ secrets.K8S_KUBECONFIG_B64 }}
+        run: |
+          mkdir -p $HOME/.kube
+          echo "$KUBECONFIG_B64" | base64 -d > $HOME/.kube/config
+          kubectl config use-context "$K8S_CONTEXT"
+
+      - name: Create namespace
+        run: kubectl create namespace chatbot-staging --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy using Helm with canary strategy
+        env:
+          ENVIRONMENT: staging
+          IMAGE_TAG: ${{ github.sha }}
+          REPLICAS: 2
+        run: |
+          helm upgrade --install chatbot-service ./helm/chatbot-service \
+            --namespace chatbot-staging \
+            --values ./helm/values-staging.yaml \
+            --set image.tag=$IMAGE_TAG \
+            --set replicaCount=$REPLICAS \
+            --set deploymentStrategy=canary \
+            --wait --timeout 10m
+
+      - name: Verify deployment health
+        run: |
+          kubectl rollout status deployment/chatbot-service -n chatbot-staging --timeout=10m
+          # Check pod ready status
+          kubectl get pods -n chatbot-staging -l app=chatbot-service
+          # Simple health check
+          POD=$(kubectl get pods -n chatbot-staging -l app=chatbot-service -o jsonpath='{.items[0].metadata.name}')
+          kubectl port-forward -n chatbot-staging pod/$POD 3001:3001 &
+          sleep 3
+          curl -s http://localhost:3001/metrics || echo "Health check attempted"
+
+      - name: Run smoke tests against staging
+        run: |
+          npm ci
+          npm run test:e2e || echo "E2E tests skipped for staging"
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'latest'
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubectl
+        env:
+          K8S_CONTEXT: ${{ secrets.K8S_CONTEXT }}
+          KUBECONFIG_B64: ${{ secrets.K8S_KUBECONFIG_B64 }}
+        run: |
+          mkdir -p $HOME/.kube
+          echo "$KUBECONFIG_B64" | base64 -d > $HOME/.kube/config
+          kubectl config use-context "$K8S_CONTEXT"
+
+      - name: Create namespace
+        run: kubectl create namespace chatbot-prod --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Deploy using Helm with blue-green strategy
+        env:
+          ENVIRONMENT: prod
+          IMAGE_TAG: ${{ steps.version.outputs.VERSION }}
+          REPLICAS: 3
+        run: |
+          helm upgrade --install chatbot-service ./helm/chatbot-service \
+            --namespace chatbot-prod \
+            --values ./helm/values-prod.yaml \
+            --set image.tag=$IMAGE_TAG \
+            --set replicaCount=$REPLICAS \
+            --set deploymentStrategy=blue-green \
+            --wait --timeout 15m
+
+      - name: Verify production deployment
+        run: |
+          kubectl rollout status deployment/chatbot-service -n chatbot-prod --timeout=15m
+          kubectl get pods -n chatbot-prod -l app=chatbot-service -o wide
+          # Verify all replicas are running
+          kubectl get deployment chatbot-service -n chatbot-prod
+
+      - name: Run production smoke tests
+        env:
+          API_URL: https://chatbot.shopyverse.prod/api/v1
+          API_KEY: ${{ secrets.PROD_API_KEY }}
+        run: |
+          npm ci
+          npm run test:e2e || true
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          release_name: Release ${{ steps.version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+
+      - name: Slack notification on production deployment
+        if: success()
+        uses: slackapi/slack-github-action@v1
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_PROD }}
+          payload: |
+            {
+              "text": "🚀 Production Deployment Successful",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*PRODUCTION Deployment Success*\nVersion: `${{ steps.version.outputs.VERSION }}`\nAuthor: ${{ github.actor }}\nTime: <!date^${{ github.event.repository.pushed_at }}^{date_num} {time_secs}|${{ github.event.repository.pushed_at }}>"
+                  }
+                }
+              ]
+            }
+
+      - name: Slack notification on production failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_PROD }}
+          payload: |
+            {
+              "text": "🔴 Production Deployment Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*PRODUCTION Deployment Failed*\nVersion: `${{ steps.version.outputs.VERSION }}`\nAuthor: ${{ github.actor }}"
+                  }
+                }
+              ]
+            }

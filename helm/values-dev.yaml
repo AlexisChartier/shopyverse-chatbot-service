@@ -1,0 +1,44 @@
+# Development environment overrides
+replicaCount: 1
+
+image:
+  tag: "main-latest"
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false
+
+ingress:
+  hosts:
+    - host: chatbot.dev.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+env:
+  LOG_LEVEL: debug
+  NODE_ENV: development
+
+livenessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 30
+
+readinessProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+deploymentStrategy: "rolling"
+
+externalServices:
+  postgres:
+    host: postgres-dev.default.svc.cluster.local
+  qdrant:
+    host: qdrant-dev.default.svc.cluster.local

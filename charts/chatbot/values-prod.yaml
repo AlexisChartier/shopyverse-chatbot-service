@@ -1,0 +1,10 @@
+replicaCount: 3
+image:
+  tag: "prod"
+env:
+  NODE_ENV: production
+  PORT: 3001
+  API_CORE_URL: "http://shopyverse-api-core.prod.svc.cluster.local"
+  RECO_SERVICE_URL: "http://shopyverse-reco-service.prod.svc.cluster.local:8002"
+secrets:
+  existingSecret: chatbot-secrets-prod
