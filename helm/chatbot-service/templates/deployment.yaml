@@ -58,13 +58,16 @@ spec:
           value: "postgres://{{ .Values.externalServices.postgres.user }}:$(DB_PASSWORD)@{{ .Values.externalServices.postgres.host }}:{{ .Values.externalServices.postgres.port }}/{{ .Values.externalServices.postgres.database }}"
         - name: QDRANT_URL
           value: "http://{{ .Values.externalServices.qdrant.host }}:{{ .Values.externalServices.qdrant.port }}"
-        {{- range .Values.secrets }}
-        - name: {{ .name }}
+        - name: HF_ACCESS_TOKEN
           valueFrom:
             secretKeyRef:
               name: {{ include "chatbot-service.fullname" . }}-secrets
-              key: {{ .key }}
-        {{- end }}
+              key: hf-access-token
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "chatbot-service.fullname" . }}-secrets
+              key: api-key
         - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
