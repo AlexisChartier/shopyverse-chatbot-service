@@ -180,6 +180,27 @@ jobs:
       - name: Create namespace
         run: kubectl create namespace chatbot-staging --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Create Kubernetes secrets
+        env:
+          HF_TOKEN: ${{ secrets.HF_ACCESS_TOKEN }}
+        run: |
+          kubectl create secret generic chatbot-service-secrets \
+            --from-literal=hf-access-token="${HF_TOKEN}" \
+            --from-literal=api-key="staging-api-key-$(date +%s)" \
+            --from-literal=db-password="chatbot" \
+            -n chatbot-staging \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create Docker registry secret
+        run: |
+          kubectl create secret docker-registry ghcr-secret \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GITHUB_TOKEN }} \
+            --docker-email=${{ github.actor }}@users.noreply.github.com \
+            -n chatbot-staging \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Deploy using Helm with canary strategy
         env:
           ENVIRONMENT: staging
@@ -239,6 +260,27 @@ jobs:
 
       - name: Create namespace
         run: kubectl create namespace chatbot-prod --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create Kubernetes secrets
+        env:
+          HF_TOKEN: ${{ secrets.HF_ACCESS_TOKEN }}
+        run: |
+          kubectl create secret generic chatbot-service-secrets \
+            --from-literal=hf-access-token="${HF_TOKEN}" \
+            --from-literal=api-key="prod-api-key-$(date +%s)" \
+            --from-literal=db-password="chatbot" \
+            -n chatbot-prod \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create Docker registry secret
+        run: |
+          kubectl create secret docker-registry ghcr-secret \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GITHUB_TOKEN }} \
+            --docker-email=${{ github.actor }}@users.noreply.github.com \
+            -n chatbot-prod \
+            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Extract version from tag
         id: version

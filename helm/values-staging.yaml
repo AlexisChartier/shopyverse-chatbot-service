@@ -2,7 +2,23 @@
 replicaCount: 2
 
 image:
-  tag: "main-latest"
+  repository: ghcr.io/alexischartier/shopyverse-chatbot-service
+  pullPolicy: Always
+  tag: "latest"
+
+imagePullSecrets:
+  - name: ghcr-secret
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3001
+  annotations: {}
 
 resources:
   limits:
@@ -19,6 +35,9 @@ autoscaling:
   targetCPUUtilizationPercentage: 70
 
 ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
   hosts:
     - host: chatbot-staging.shopyverse.com
       paths:
@@ -33,13 +52,56 @@ env:
   LOG_LEVEL: info
   NODE_ENV: staging
 
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "3001"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+livenessProbe:
+  httpGet:
+    path: /metrics
+    port: 3001
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /metrics
+    port: 3001
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
 deploymentStrategy: "canary"
 
 externalServices:
   postgres:
     host: postgres-staging.default.svc.cluster.local
+    port: 5432
+    database: chatbot_db
+    user: chatbot
   qdrant:
     host: qdrant-staging.default.svc.cluster.local
+    port: 6333
 
 # Canary deployment config
 canary:
