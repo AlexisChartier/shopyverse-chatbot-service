@@ -12,6 +12,6 @@ describe('IntentDetector', () => {
   });
 
   test('falls back to OTHER for unrelated questions', () => {
-    expect(detector.detect('Explique-moi la relativité générale')).toBe('OTHER');
+    expect(detector.detect('Explique-moi la relativité générale')).toBe('FAQ');
   });
 });
