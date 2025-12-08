@@ -5,6 +5,9 @@ import { RAG_PROMPT_TEMPLATE } from "../../prompts/rag.fr.js";
 import { intentDetector, type Intent } from "../../nlu/intentDetector.js";
 import { productRetrieverService } from "../products/productRetriever.js";
 import { chatLogRepository } from "../../infrastructure/db/repositories/ChatLogRepository.js";
+import { logger } from "../../infrastructure/observability/logger.js";
+import { chatbotFallbackCounter } from "../../infrastructure/observability/metrics.js";
+import { recoClient } from "../../infrastructure/reco/RecoClient.js";
 
 type SourceOut = { title: string; text: string; score?: number };
 
@@ -22,12 +25,19 @@ export class ChatService {
     return `sess_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
   }
 
-  async processMessage(userMessage: string, sessionId?: string): Promise<ChatResponse> {
-    console.log(`Traitement de la question : "${userMessage}"`);
+  async processMessage(
+    userMessage: string,
+    sessionId?: string,
+    requestId?: string,
+    requestLogger?: any,
+  ): Promise<ChatResponse> {
+    const log = requestLogger?.child?.({ request_id: requestId }) ?? logger.child({ request_id: requestId });
+
+    log.info({ sessionId, requestId }, `Processing message: ${userMessage}`);
 
     // 0) Déterminer l'intent
     const intent: Intent = intentDetector.detect(userMessage);
-    console.log("Intent détecté :", intent);
+    log.info({ intent }, "Intent detected");
 
     // 1) Récupérer ou créer une session
     let currentSessionId = sessionId || this.generateSessionId();
@@ -35,22 +45,23 @@ export class ChatService {
 
     // 2) Router selon l'intent
     if (intent === "FAQ") {
-      return this.handleFaq(userMessage, currentSessionId, history, intent);
+      return this.handleFaq(userMessage, currentSessionId, history, intent, log);
     }
 
     if (intent === "PRODUCT_SEARCH") {
-      return this.handleProductSearch(userMessage, currentSessionId, history, intent);
+      return this.handleProductSearch(userMessage, currentSessionId, history, intent, log);
     }
 
     // OTHER
-    return this.handleOther(userMessage, currentSessionId, history, intent);
+    return this.handleOther(userMessage, currentSessionId, history, intent, log);
   }
 
   private async handleFaq(
     userMessage: string,
     sessionId: string,
     history: ChatMessage[],
-    intent: Intent
+    intent: Intent,
+    log: any,
   ): Promise<ChatResponse> {
     const sources = await retrieverService.search(userMessage, 5);
 
@@ -77,8 +88,10 @@ export class ChatService {
           hasFallback: true,
         });
       } catch (e) {
-        console.error("⚠️ Failed to log FAQ (no sources) interaction:", e);
+        log.error({ err: e }, "Failed to log FAQ (no sources) interaction");
       }
+
+      chatbotFallbackCounter.labels(intent, "no_sources").inc();
 
       return { answer, sources: [], sessionId };
     }
@@ -92,7 +105,7 @@ export class ChatService {
     const relevantSources = sortedSources.slice(0, TOP_K);
 
     if (bestScore < MIN_SCORE) {
-      console.log("FAQ: aucun résultat suffisamment pertinent. bestScore =", bestScore);
+      log.warn({ bestScore }, "FAQ: no relevant result");
 
       const answer =
         "Je suis désolé, je n'ai pas trouvé d'information précise à ce sujet dans ma base de connaissances. " +
@@ -115,17 +128,17 @@ export class ChatService {
           hasFallback: true,
         });
       } catch (e) {
-        console.error("⚠️ Failed to log FAQ (low score) interaction:", e);
+        log.error({ err: e }, "Failed to log FAQ (low score) interaction");
       }
+
+      chatbotFallbackCounter.labels(intent, "low_score").inc();
 
       return { answer, sources: [], sessionId };
     }
 
     // === Cas normal : RAG + LLM avec BGE Reranking ===
     // Step 1: Rerank candidates using BGE reranker to improve quality
-    console.log(
-      `FAQ: applying BGE reranker on ${relevantSources.length} sources before LLM call`
-    );
+    log.debug({ sourcesCount: relevantSources.length }, "FAQ: applying BGE reranker");
 
     const rerankedResults = await bgeReranker.rerank(
       userMessage,
@@ -158,9 +171,7 @@ export class ChatService {
       { role: "user", content: ragPrompt }
     ];
 
-    console.log(
-      `FAQ: appel du LLM avec ${finalSources.length} reranked sources, sessionId=${sessionId}`
-    );
+    log.info({ sourcesCount: finalSources.length, sessionId }, "FAQ: calling LLM");
 
     const answer = await llmClient.generate(messages);
 
@@ -181,7 +192,7 @@ export class ChatService {
         hasFallback: false,
       });
     } catch (e) {
-      console.error("⚠️ Failed to log FAQ interaction:", e);
+      log.error({ err: e }, "Failed to log FAQ interaction");
     }
 
     return {
@@ -199,7 +210,8 @@ export class ChatService {
     userMessage: string,
     sessionId: string,
     history: ChatMessage[],
-    intent: Intent
+    intent: Intent,
+    log: any,
   ): Promise<ChatResponse> {
     // 1) Recherche sémantique produit
     const results = await productRetrieverService.search(userMessage, 5);
@@ -227,8 +239,10 @@ export class ChatService {
           hasFallback: true,
         });
       } catch (e) {
-        console.error("⚠️ Failed to log PRODUCT_SEARCH (no results) interaction:", e);
+        log.error({ err: e }, "Failed to log PRODUCT_SEARCH (no results) interaction");
       }
+
+      chatbotFallbackCounter.labels(intent, "no_product").inc();
 
       return {
         answer,
@@ -241,14 +255,35 @@ export class ChatService {
     const TOP_K = 3;
     const topResults = results.slice(0, TOP_K);
 
+    // Call recommendation service based on best hit to augment response
+    let recommendations: { title: string; description?: string }[] = [];
+    try {
+      if (topResults[0]?.productId) {
+        const reco = await recoClient.getRecommendations(topResults[0].productId);
+        recommendations = reco.map((r) => ({
+          title: r.name ?? r.title ?? r.slug ?? 'Produit recommandé',
+          description: r.description,
+        }));
+      }
+    } catch (err) {
+      log.warn({ err }, "Failed to fetch recommendations from reco service");
+    }
+
     const lines = topResults.map((p, idx) => {
       const cat = p.categoryName ? ` (${p.categoryName})` : "";
       return `${idx + 1}. ${p.title}${cat} — ${p.description}`;
     });
 
+    const recoLines =
+      recommendations.length > 0
+        ? "\n\nRecommandations liées :\n" +
+          recommendations.map((r, idx) => `${idx + 1}. ${r.title}${r.description ? ` — ${r.description}` : ''}`).join("\n")
+        : "";
+
     const answer =
       "Voici quelques produits ShopyVerse qui pourraient vous intéresser :\n\n" +
-      lines.join("\n");
+      lines.join("\n") +
+      recoLines;
 
     const updatedHistory: ChatMessage[] = [
       ...history,
@@ -266,7 +301,7 @@ export class ChatService {
         hasFallback: false,
       });
     } catch (e) {
-      console.error("⚠️ Failed to log PRODUCT_SEARCH interaction:", e);
+      log.error({ err: e }, "Failed to log PRODUCT_SEARCH interaction");
     }
 
     return {
@@ -284,7 +319,8 @@ export class ChatService {
     userMessage: string,
     sessionId: string,
     history: ChatMessage[],
-    intent: Intent
+    intent: Intent,
+    log: any,
   ): Promise<ChatResponse> {
 
     const answer =
@@ -311,8 +347,10 @@ export class ChatService {
         hasFallback: true,
       });
     } catch (e) {
-      console.error("⚠️ Failed to log OTHER interaction:", e);
+      log.error({ err: e }, "Failed to log OTHER interaction");
     }
+
+    chatbotFallbackCounter.labels(intent, "other").inc();
 
     return {
       answer,

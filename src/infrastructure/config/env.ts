@@ -19,6 +19,9 @@ const envSchema = z.object({
   // API Core (pour les outils)
   API_CORE_URL: z.string().url().default('http://localhost:3000'),
 
+  // Recommendation service
+  RECO_SERVICE_URL: z.string().url().default('http://localhost:8002'),
+
   // Model (optional override)
   HF_MODEL: z.string().optional(),
 

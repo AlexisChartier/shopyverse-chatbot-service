@@ -1,0 +1,95 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/your-org/shopyverse-chatbot
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3001
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 75
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: chatbot.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+env:
+  NODE_ENV: production
+  PORT: 3001
+  API_CORE_URL: "http://shopyverse-api-core"
+  RECO_SERVICE_URL: "http://shopyverse-reco-service:8002"
+
+# External secrets (managed via Vault/ExternalSecrets)
+secrets:
+  existingSecret: chatbot-secrets
+  # expected keys: API_KEY, HF_ACCESS_TOKEN, QDRANT_URL, QDRANT_API_KEY, CHATBOT_DB_URL, HF_MODEL
+
+externalSecret:
+  enabled: true
+  secretStoreRef:
+    name: vault-backend
+    kind: ClusterSecretStore
+  remoteRefs:
+    apiKey:
+      key: chatbot/API_KEY
+    hfToken:
+      key: chatbot/HF_ACCESS_TOKEN
+    qdrantUrl:
+      key: chatbot/QDRANT_URL
+    qdrantApiKey:
+      key: chatbot/QDRANT_API_KEY
+    recoServiceUrl:
+      key: chatbot/RECO_SERVICE_URL
+    logLevel:
+      key: chatbot/K8S_LOG_LEVEL
+    slackWebhook:
+      key: shared/SLACK_WEBHOOK
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: /metrics
+  prometheus.io/port: "3001"
+
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+
+alerts:
+  enabled: true
+  latencyP95Seconds: 1
+  errorRateThreshold: 0.05
+  cpuSaturation: 0.8
+  memorySaturation: 0.8
+
+nodeSelector: {}
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 3001
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 3001
