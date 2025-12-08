@@ -41,6 +41,27 @@ jobs:
       - name: Create namespace
         run: kubectl create namespace chatbot-dev --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Create Kubernetes secrets
+        env:
+          HF_TOKEN: ${{ secrets.HF_ACCESS_TOKEN }}
+        run: |
+          kubectl create secret generic chatbot-service-secrets \
+            --from-literal=hf-access-token="${HF_TOKEN}" \
+            --from-literal=api-key="dev-api-key-$(date +%s)" \
+            --from-literal=db-password="chatbot" \
+            -n chatbot-dev \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create Docker registry secret
+        run: |
+          kubectl create secret docker-registry ghcr-secret \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GITHUB_TOKEN }} \
+            --docker-email=${{ github.actor }}@users.noreply.github.com \
+            -n chatbot-dev \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Deploy using Helm
         env:
           ENVIRONMENT: dev

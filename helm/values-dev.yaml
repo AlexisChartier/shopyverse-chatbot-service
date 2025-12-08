@@ -6,7 +6,8 @@ image:
   pullPolicy: Always
   tag: "latest"
 
-imagePullSecrets: []
+imagePullSecrets:
+  - name: ghcr-secret
 
 serviceAccount:
   create: true
