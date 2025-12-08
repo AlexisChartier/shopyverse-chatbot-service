@@ -52,11 +52,25 @@ jobs:
             --values ./helm/values-dev.yaml \
             --set image.tag=$IMAGE_TAG \
             --set replicaCount=$REPLICAS \
-            --wait --timeout 10m
+            --wait --timeout 3m || true
+
+      - name: Debug deployment status
+        if: always()
+        run: |
+          echo "=== Deployment Status ==="
+          kubectl get deployment -n chatbot-dev
+          echo -e "\n=== Pod Status ==="
+          kubectl get pods -n chatbot-dev -l app=chatbot-service
+          echo -e "\n=== Pod Events ==="
+          kubectl get events -n chatbot-dev --sort-by='.lastTimestamp' | tail -20
+          echo -e "\n=== Pod Logs (if any) ==="
+          kubectl logs -n chatbot-dev -l app=chatbot-service --tail=50 || echo "No logs available"
+          echo -e "\n=== Pod Description ==="
+          kubectl describe pods -n chatbot-dev -l app=chatbot-service || echo "No pods found"
 
       - name: Run health check
         run: |
-          kubectl rollout status deployment/chatbot-service -n chatbot-dev --timeout=5m
+          kubectl rollout status deployment/chatbot-service -n chatbot-dev --timeout=2m
           kubectl get pods -n chatbot-dev -l app=chatbot-service
 
       - name: Slack notification on success
