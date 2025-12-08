@@ -62,25 +62,26 @@ export class ChatLogRepository {
    */
   async getBySessionId(sessionId: string): Promise<ChatInteractionLog[]> {
     const query = `
-      SELECT 
-        session_id as "sessionId",
-        intent,
-        user_message as "userMessage",
-        assistant_answer as "assistantAnswer",
-        has_fallback as "hasFallback"
-      FROM chat_interactions
-      WHERE session_id = $1
-      ORDER BY created_at ASC;
-    `;
+        SELECT 
+            session_id as "sessionId",
+            intent,
+            user_message as "userMessage",
+            assistant_answer as "assistantAnswer",
+            has_fallback as "hasFallback",
+            created_at as "timestamp"
+        FROM chat_interactions
+        WHERE session_id = $1
+        ORDER BY created_at ASC;
+        `;
 
     try {
-      const result = await db.query(query, [sessionId]);
-      return result.rows as ChatInteractionLog[];
+        const result = await db.query(query, [sessionId]);
+        return result.rows as ChatInteractionLog[];
     } catch (err) {
-      logger.error({ err, sessionId }, "❌ Failed to retrieve session logs");
-      throw err;
+        logger.error({ err, sessionId }, "❌ Failed to retrieve session logs");
+        throw err;
     }
-  }
+}
 
   /**
    * Get statistics about chat interactions (for dashboard)
