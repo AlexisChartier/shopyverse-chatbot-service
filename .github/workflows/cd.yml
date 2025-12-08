@@ -60,7 +60,7 @@ jobs:
           kubectl get pods -n chatbot-dev -l app=chatbot-service
 
       - name: Slack notification on success
-        if: success()
+        if: success() && vars.SLACK_WEBHOOK_DEV != ''
         uses: slackapi/slack-github-action@v1
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK_DEV }}
@@ -77,9 +77,10 @@ jobs:
                 }
               ]
             }
+        continue-on-error: true
 
       - name: Slack notification on failure
-        if: failure()
+        if: failure() && vars.SLACK_WEBHOOK_DEV != ''
         uses: slackapi/slack-github-action@v1
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK_DEV }}
@@ -96,6 +97,7 @@ jobs:
                 }
               ]
             }
+        continue-on-error: true
 
   deploy-staging:
     name: Deploy to Staging
