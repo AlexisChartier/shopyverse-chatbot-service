@@ -38,9 +38,30 @@ async function initializeSchema(p: Pool): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS idx_chat_interactions_intent_created 
         ON chat_interactions(intent, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS faq_items (
+        id BIGSERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'general',
+        tags TEXT[] NOT NULL DEFAULT '{}',
+        embedding_vector TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_faq_items_category 
+        ON faq_items(category);
+
+      CREATE INDEX IF NOT EXISTS idx_faq_items_is_active 
+        ON faq_items(is_active);
+
+      CREATE INDEX IF NOT EXISTS idx_faq_items_created_at 
+        ON faq_items(created_at DESC);
     `);
     
-    logger.info("✅ Database schema initialized (chat_interactions table ready)");
+    logger.info("✅ Database schema initialized (chat_interactions & faq_items tables ready)");
   } catch (err) {
     logger.error({ err }, "❌ Failed to initialize database schema");
     throw err;
