@@ -11,6 +11,12 @@ serviceAccount:
   annotations: {}
   name: ""
 
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3001
+  annotations: {}
+
 resources:
   limits:
     cpu: 250m
@@ -23,6 +29,9 @@ autoscaling:
   enabled: false
 
 ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
   hosts:
     - host: chatbot.dev.local
       paths:
@@ -35,12 +44,43 @@ env:
   NODE_ENV: development
 
 livenessProbe:
+  httpGet:
+    path: /metrics
+    port: 3001
   initialDelaySeconds: 10
   periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
 
 readinessProbe:
+  httpGet:
+    path: /metrics
+    port: 3001
   initialDelaySeconds: 5
   periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "3001"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
 
 deploymentStrategy: "rolling"
 
