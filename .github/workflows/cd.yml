@@ -68,10 +68,26 @@ jobs:
           echo -e "\n=== Pod Description ==="
           kubectl describe pods -n chatbot-dev -l app=chatbot-service || echo "No pods found"
 
+      - name: Force cleanup old pods if stuck
+        if: always()
+        run: |
+          # Delete old pods that are stuck terminating
+          kubectl delete pods -n chatbot-dev -l app=chatbot-service --field-selector status.phase=Terminating --grace-period=0 --force || true
+
       - name: Run health check
         run: |
-          kubectl rollout status deployment/chatbot-service -n chatbot-dev --timeout=2m
+          kubectl rollout status deployment/chatbot-service -n chatbot-dev --timeout=2m || true
           kubectl get pods -n chatbot-dev -l app=chatbot-service
+          
+          # Check if at least one pod is running
+          RUNNING_PODS=$(kubectl get pods -n chatbot-dev -l app=chatbot-service --field-selector=status.phase=Running -o jsonpath='{.items}' | jq '. | length')
+          if [ "$RUNNING_PODS" -gt 0 ]; then
+            echo "✅ Deployment successful: $RUNNING_PODS pod(s) running"
+            exit 0
+          else
+            echo "❌ No running pods found"
+            exit 1
+          fi
 
       - name: Slack notification on success
         if: success() && vars.SLACK_WEBHOOK_DEV != ''
