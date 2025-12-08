@@ -41,25 +41,6 @@ jobs:
       - name: Create namespace
         run: kubectl create namespace chatbot-dev --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Create Kubernetes secrets
-        env:
-          HF_TOKEN: ${{ secrets.HF_ACCESS_TOKEN }}
-        run: |
-          kubectl create secret generic chatbot-service-secrets \
-            --from-literal=hf-access-token="${HF_TOKEN}" \
-            --from-literal=api-key="dev-api-key-$(date +%s)" \
-            --from-literal=db-password="chatbot" \
-            -n chatbot-dev \
-            --dry-run=client -o yaml | \
-          kubectl label -f - --dry-run=client -o yaml \
-            app.kubernetes.io/managed-by=Helm \
-            meta.helm.sh/release-name=chatbot-service \
-            meta.helm.sh/release-namespace=chatbot-dev --overwrite | \
-          kubectl annotate -f - --dry-run=client -o yaml \
-            meta.helm.sh/release-name=chatbot-service \
-            meta.helm.sh/release-namespace=chatbot-dev --overwrite | \
-          kubectl apply -f -
-
       - name: Create Docker registry secret
         run: |
           kubectl create secret docker-registry ghcr-secret \
@@ -188,25 +169,6 @@ jobs:
       - name: Create namespace
         run: kubectl create namespace chatbot-staging --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Create Kubernetes secrets
-        env:
-          HF_TOKEN: ${{ secrets.HF_ACCESS_TOKEN }}
-        run: |
-          kubectl create secret generic chatbot-service-secrets \
-            --from-literal=hf-access-token="${HF_TOKEN}" \
-            --from-literal=api-key="staging-api-key-$(date +%s)" \
-            --from-literal=db-password="chatbot" \
-            -n chatbot-staging \
-            --dry-run=client -o yaml | \
-          kubectl label -f - --dry-run=client -o yaml \
-            app.kubernetes.io/managed-by=Helm \
-            meta.helm.sh/release-name=chatbot-service \
-            meta.helm.sh/release-namespace=chatbot-staging --overwrite | \
-          kubectl annotate -f - --dry-run=client -o yaml \
-            meta.helm.sh/release-name=chatbot-service \
-            meta.helm.sh/release-namespace=chatbot-staging --overwrite | \
-          kubectl apply -f -
-
       - name: Create Docker registry secret
         run: |
           kubectl create secret docker-registry ghcr-secret \
@@ -276,25 +238,6 @@ jobs:
 
       - name: Create namespace
         run: kubectl create namespace chatbot-prod --dry-run=client -o yaml | kubectl apply -f -
-
-      - name: Create Kubernetes secrets
-        env:
-          HF_TOKEN: ${{ secrets.HF_ACCESS_TOKEN }}
-        run: |
-          kubectl create secret generic chatbot-service-secrets \
-            --from-literal=hf-access-token="${HF_TOKEN}" \
-            --from-literal=api-key="prod-api-key-$(date +%s)" \
-            --from-literal=db-password="chatbot" \
-            -n chatbot-prod \
-            --dry-run=client -o yaml | \
-          kubectl label -f - --dry-run=client -o yaml \
-            app.kubernetes.io/managed-by=Helm \
-            meta.helm.sh/release-name=chatbot-service \
-            meta.helm.sh/release-namespace=chatbot-prod --overwrite | \
-          kubectl annotate -f - --dry-run=client -o yaml \
-            meta.helm.sh/release-name=chatbot-service \
-            meta.helm.sh/release-namespace=chatbot-prod --overwrite | \
-          kubectl apply -f -
 
       - name: Create Docker registry secret
         run: |
