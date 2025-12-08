@@ -11,7 +11,12 @@ export async function chatRoute(fastify: FastifyInstance) {
 
     try {
       const { message, sessionId } = body;
-      const response = await chatService.processMessage(message, sessionId);
+      const response = await chatService.processMessage(
+        message,
+        sessionId,
+        request.id as string,
+        request.log
+      );
       return reply.send(response);
     } catch (err) {
       request.log.error(err);

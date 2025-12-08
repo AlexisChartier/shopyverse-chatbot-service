@@ -1,0 +1,40 @@
+{{- if .Values.alerts.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "chatbot-service.fullname" . }}-alerts
+  labels:
+    release: prometheus-stack
+spec:
+  groups:
+    - name: chatbot.sli
+      rules:
+        - alert: ChatbotLatencyP95High
+          expr: histogram_quantile(0.95, sum(rate(chatbot_http_request_duration_seconds_bucket{job="{{ include "chatbot-service.fullname" . }}"}[5m])) by (le)) > {{ .Values.alerts.latencyP95Seconds }}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Chatbot p95 latency > {{ .Values.alerts.latencyP95Seconds }}s"
+        - alert: ChatbotHighErrorRate
+          expr: sum(rate(chatbot_http_requests_total{status=~"5.."}[5m])) / sum(rate(chatbot_http_requests_total[5m])) > {{ .Values.alerts.errorRateThreshold }}
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Chatbot 5xx error rate above threshold"
+        - alert: ChatbotCpuSaturation
+          expr: sum(rate(container_cpu_usage_seconds_total{pod=~"{{ include "chatbot-service.fullname" . }}.*",container!=""}[5m])) by (pod) > {{ .Values.alerts.cpuSaturation }}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Chatbot CPU saturation"
+        - alert: ChatbotMemorySaturation
+          expr: sum(container_memory_working_set_bytes{pod=~"{{ include "chatbot-service.fullname" . }}.*",container!=""}) by (pod) / sum(kube_pod_container_resource_limits_memory_bytes{pod=~"{{ include "chatbot-service.fullname" . }}.*",container!=""}) by (pod) > {{ .Values.alerts.memorySaturation }}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Chatbot memory saturation"
+{{- end }}

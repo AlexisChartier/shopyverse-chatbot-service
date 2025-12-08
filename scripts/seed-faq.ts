@@ -16,6 +16,18 @@ const faqData = [
   {
     content: "Pour contacter le support, écrivez à support@shopyverse.com.",
     metadata: { type: "faq", topic: "contact" }
+  },
+  {
+    content: "Les produits audio (cat-audio) incluent casques, enceintes et barres de son avec 2 ans de garantie.",
+    metadata: { type: "faq", topic: "catalogue", categoryId: "cat-audio" }
+  },
+  {
+    content: "Les guides de tailles sont disponibles pour la catégorie mode (cat-mode) directement sur les fiches produit.",
+    metadata: { type: "faq", topic: "tailles", categoryId: "cat-mode" }
+  },
+  {
+    content: "Pour les commandes supérieures à 150€, la livraison est offerte en France.",
+    metadata: { type: "faq", topic: "livraison", threshold: 150 }
   }
 ];
 

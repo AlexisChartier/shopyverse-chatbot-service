@@ -1,0 +1,10 @@
+replicaCount: 2
+image:
+  tag: "staging"
+env:
+  NODE_ENV: production
+  PORT: 3001
+  API_CORE_URL: "http://shopyverse-api-core.staging.svc.cluster.local"
+  RECO_SERVICE_URL: "http://shopyverse-reco-service.staging.svc.cluster.local:8002"
+secrets:
+  existingSecret: chatbot-secrets-staging
