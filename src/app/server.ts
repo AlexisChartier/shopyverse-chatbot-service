@@ -32,7 +32,12 @@ const server = Fastify({
 });
 
 // Plugins globaux
-await server.register(cors, { origin: '*' }); // A restreindre en prod
+await server.register(cors, {
+  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
+  credentials: true,
+});
 await server.register(helmet);
 
 // Initialize PostgreSQL connection pool and create schema

@@ -21,7 +21,48 @@ export class IntentDetector {
       "track",
       "tracking",
       "annuler ma commande",
-      "annulation"
+      "annulation",
+      "rupture",
+      "rupture de stock",
+      "stock",
+      "disponible",
+      "disponibilité",
+      "garantie",
+      "taille",
+      "couleur",
+      "prix",
+      "promo",
+      "promotion",
+      "coupon",
+      "code promo",
+      "paiement",
+      "payer",
+      "paiements",
+      "facture",
+      "invoice",
+      "compte",
+      "inscription",
+      "inscription",
+      "mdp",
+      "mot de passe",
+      "password",
+      "politique",
+      "conditions",
+      "cgv",
+      "contact",
+      "aide",
+      "données",
+      "données personnelles",
+      "protégées",
+      "protégé",
+      "sécurité",
+      "sécurisé",
+      "rgpd",
+      "vie privée",
+      "confidentialité",
+      "ssl",
+      "cryptage",
+      "chiffrement"
     ];
 
     if (faqKeywords.some((kw) => text.includes(kw))) {
@@ -51,8 +92,9 @@ export class IntentDetector {
       return "PRODUCT_SEARCH";
     }
 
-    // Sinon → autre
-    return "OTHER";
+    // Par défaut → FAQ (recherche vectorielle)
+    // Toutes les questions non-produit passent par la FAQ avec recherche sémantique
+    return "FAQ";
   }
 }
 
