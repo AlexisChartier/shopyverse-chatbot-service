@@ -28,14 +28,15 @@ jobs:
       - name: Setup kubectl
         uses: azure/setup-kubectl@v3
 
-      - name: Configure kubectl (Dev cluster)
+      - name: Configure kubectl
         env:
-          K8S_CONTEXT: ${{ secrets.K8S_DEV_CONTEXT }}
-          KUBECONFIG_B64: ${{ secrets.K8S_DEV_KUBECONFIG_B64 }}
+          K8S_CONTEXT: ${{ secrets.K8S_CONTEXT }}
+          KUBECONFIG_B64: ${{ secrets.K8S_KUBECONFIG_B64 }}
         run: |
           mkdir -p $HOME/.kube
           echo "$KUBECONFIG_B64" | base64 -d > $HOME/.kube/config
-          kubectl config use-context "$K8S_CONTEXT" || kubectl config set-context dev --cluster=dev --user=dev --namespace=chatbot-dev
+          kubectl config use-context "$K8S_CONTEXT"
+          kubectl version --client
 
       - name: Create namespace
         run: kubectl create namespace chatbot-dev --dry-run=client -o yaml | kubectl apply -f -
@@ -114,10 +115,10 @@ jobs:
       - name: Setup kubectl
         uses: azure/setup-kubectl@v3
 
-      - name: Configure kubectl (Staging cluster)
+      - name: Configure kubectl
         env:
-          K8S_CONTEXT: ${{ secrets.K8S_STAGING_CONTEXT }}
-          KUBECONFIG_B64: ${{ secrets.K8S_STAGING_KUBECONFIG_B64 }}
+          K8S_CONTEXT: ${{ secrets.K8S_CONTEXT }}
+          KUBECONFIG_B64: ${{ secrets.K8S_KUBECONFIG_B64 }}
         run: |
           mkdir -p $HOME/.kube
           echo "$KUBECONFIG_B64" | base64 -d > $HOME/.kube/config
@@ -174,10 +175,10 @@ jobs:
       - name: Setup kubectl
         uses: azure/setup-kubectl@v3
 
-      - name: Configure kubectl (Production cluster)
+      - name: Configure kubectl
         env:
-          K8S_CONTEXT: ${{ secrets.K8S_PROD_CONTEXT }}
-          KUBECONFIG_B64: ${{ secrets.K8S_PROD_KUBECONFIG_B64 }}
+          K8S_CONTEXT: ${{ secrets.K8S_CONTEXT }}
+          KUBECONFIG_B64: ${{ secrets.K8S_KUBECONFIG_B64 }}
         run: |
           mkdir -p $HOME/.kube
           echo "$KUBECONFIG_B64" | base64 -d > $HOME/.kube/config
