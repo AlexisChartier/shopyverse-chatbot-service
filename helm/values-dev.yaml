@@ -3,8 +3,10 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/alexischartier/shopyverse-chatbot-service
-  pullPolicy: IfNotPresent
-  tag: "main-latest"
+  pullPolicy: Always
+  tag: "latest"
+
+imagePullSecrets: []
 
 serviceAccount:
   create: true
