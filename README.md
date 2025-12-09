@@ -229,343 +229,6 @@ curl -s -X POST http://localhost:3001/api/v1/ingest/products \
 
 Ces produits seront vectorisés et indexés pour la recherche sémantique (ex. "je cherche un t-shirt confortable pour homme").
 
-**Frontend Integration (React TypeScript)**
-------------------------------------------
-
-### Setup
-
-To integrate the chatbot service into your React TypeScript frontend, follow these steps:
-
-#### 1. Install Dependencies
-
-```bash
-npm install axios # or your preferred HTTP client
-```
-
-#### 2. Create a Chatbot Service Client
-
-Create a file `src/services/chatbotClient.ts` in your React app:
-
-```typescript
-import axios, { AxiosInstance } from 'axios';
-
-interface ChatMessage {
-  message: string;
-}
-
-interface ChatResponse {
-  answer: string;
-  sources?: Array<{
-    title: string;
-    text: string;
-  }>;
-  products?: Array<{
-    id: string;
-    name: string;
-    price?: number;
-  }>;
-  recommendations?: string[];
-}
-
-class ChatbotClient {
-  private apiClient: AxiosInstance;
-  private apiKey: string;
-
-  constructor(baseURL: string, apiKey: string) {
-    this.apiKey = apiKey;
-    this.apiClient = axios.create({
-      baseURL,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-      },
-    });
-  }
-
-  /**
-   * Send a message to the chatbot and get a response
-   */
-  async sendMessage(message: string): Promise<ChatResponse> {
-    try {
-      const response = await this.apiClient.post<ChatResponse>(
-        '/api/v1/chat',
-        { message }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Chatbot API error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get conversation metrics (optional)
-   */
-  async getMetrics(): Promise<any> {
-    try {
-      const response = await this.apiClient.get('/metrics');
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch metrics:', error);
-      throw error;
-    }
-  }
-}
-
-// Create a singleton instance
-const chatbotClient = new ChatbotClient(
-  process.env.REACT_APP_CHATBOT_API_URL || 'http://localhost:3001',
-  process.env.REACT_APP_CHATBOT_API_KEY || 'dev-api-key'
-);
-
-export default chatbotClient;
-```
-
-#### 3. Create Environment Variables
-
-In your React project's `.env` file:
-
-```bash
-REACT_APP_CHATBOT_API_URL=http://localhost:3001
-REACT_APP_CHATBOT_API_KEY=dev-api-key
-```
-
-For production, set these in your deployment environment variables.
-
-#### 4. Create a React Hook for Chat
-
-Create `src/hooks/useChatbot.ts`:
-
-```typescript
-import { useState, useCallback } from 'react';
-import chatbotClient from '../services/chatbotClient';
-
-interface ChatResponse {
-  answer: string;
-  sources?: Array<{
-    title: string;
-    text: string;
-  }>;
-  products?: Array<{
-    id: string;
-    name: string;
-    price?: number;
-  }>;
-}
-
-interface UseChatbotReturn {
-  sendMessage: (message: string) => Promise<ChatResponse | null>;
-  response: ChatResponse | null;
-  loading: boolean;
-  error: string | null;
-}
-
-export const useChatbot = (): UseChatbotReturn => {
-  const [response, setResponse] = useState<ChatResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const sendMessage = useCallback(async (message: string) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result = await chatbotClient.sendMessage(message);
-      setResponse(result);
-      return result;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMessage);
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  return { sendMessage, response, loading, error };
-};
-```
-
-#### 5. Create a Chat Widget Component
-
-Create `src/components/ChatWidget.tsx`:
-
-```typescript
-import React, { useState } from 'react';
-import { useChatbot } from '../hooks/useChatbot';
-
-interface Message {
-  id: string;
-  type: 'user' | 'bot';
-  content: string;
-  sources?: any[];
-}
-
-export const ChatWidget: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const { sendMessage, loading, error } = useChatbot();
-
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!input.trim()) return;
-
-    // Add user message to chat
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      type: 'user',
-      content: input,
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput('');
-
-    // Send to chatbot
-    const response = await sendMessage(input);
-
-    if (response) {
-      const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'bot',
-        content: response.answer,
-        sources: response.sources,
-      };
-      setMessages((prev) => [...prev, botMessage]);
-    } else if (error) {
-      const errorMessage: Message = {
-        id: (Date.now() + 2).toString(),
-        type: 'bot',
-        content: `Erreur: ${error}`,
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    }
-  };
-
-  return (
-    <div className="chat-widget" style={styles.container}>
-      <div style={styles.header}>
-        <h3>ShopyVerse Assistant</h3>
-      </div>
-
-      <div style={styles.messagesContainer}>
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            style={{
-              ...styles.message,
-              ...(msg.type === 'user' ? styles.userMessage : styles.botMessage),
-            }}
-          >
-            <p>{msg.content}</p>
-            {msg.sources && msg.sources.length > 0 && (
-              <div style={styles.sources}>
-                <strong>Sources:</strong>
-                <ul>
-                  {msg.sources.map((source, idx) => (
-                    <li key={idx}>{source.title}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        ))}
-        {loading && <div style={styles.loading}>Chargement...</div>}
-      </div>
-
-      <form onSubmit={handleSendMessage} style={styles.form}>
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Posez votre question..."
-          disabled={loading}
-          style={styles.input}
-        />
-        <button type="submit" disabled={loading} style={styles.button}>
-          Envoyer
-        </button>
-      </form>
-    </div>
-  );
-};
-
-const styles = {
-  container: {
-    display: 'flex' as const,
-    flexDirection: 'column' as const,
-    width: '400px',
-    height: '600px',
-    border: '1px solid #ccc',
-    borderRadius: '8px',
-    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-    backgroundColor: '#fff',
-  },
-  header: {
-    backgroundColor: '#007bff',
-    color: '#fff',
-    padding: '16px',
-    borderRadius: '8px 8px 0 0',
-    textAlign: 'center' as const,
-  },
-  messagesContainer: {
-    flex: 1,
-    overflowY: 'auto' as const,
-    padding: '16px',
-    display: 'flex' as const,
-    flexDirection: 'column' as const,
-    gap: '12px',
-  },
-  message: {
-    marginBottom: '8px',
-    padding: '12px',
-    borderRadius: '8px',
-    maxWidth: '80%',
-  },
-  userMessage: {
-    alignSelf: 'flex-end' as const,
-    backgroundColor: '#007bff',
-    color: '#fff',
-  },
-  botMessage: {
-    alignSelf: 'flex-start' as const,
-    backgroundColor: '#f0f0f0',
-    color: '#333',
-  },
-  sources: {
-    marginTop: '8px',
-    fontSize: '12px',
-    opacity: 0.8,
-  },
-  loading: {
-    padding: '12px',
-    textAlign: 'center' as const,
-    color: '#666',
-    fontStyle: 'italic',
-  },
-  form: {
-    display: 'flex' as const,
-    gap: '8px',
-    padding: '16px',
-    borderTop: '1px solid #ccc',
-  },
-  input: {
-    flex: 1,
-    padding: '8px 12px',
-    border: '1px solid #ccc',
-    borderRadius: '4px',
-    fontSize: '14px',
-  },
-  button: {
-    padding: '8px 16px',
-    backgroundColor: '#007bff',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '14px',
-  },
-};
-```
 
 #### 6. Use the Chat Widget in Your App
 
@@ -706,6 +369,36 @@ curl -X POST http://localhost:3001/api/v1/ingest \
     ]
   }'
 ```
+
+**Automatisation des Topics FAQ**
+
+La gestion des topics (catégories) pour les FAQs est **automatisée et intelligente** :
+
+1. **Détection automatique** :
+   - Lors de l'ajout d'une FAQ via l'admin panel ou l'API, le système scanne le contenu pour extraire des mots-clés pertinents.
+   - Si aucun topic n'est fourni, le NLU classifier analyse le texte et propose automatiquement une catégorie (ex: "livraison", "paiement", "retours", "produits", "compte", "sécurité", etc.).
+
+2. **Persistance en base** :
+   - Les topics sont stockés dans PostgreSQL (`faq_items.tags` array NATIVE).
+   - Chaque FAQ peut avoir **plusieurs tags** pour une meilleure recherche croisée (ex: ["paiement", "sécurité", "compte"]).
+
+3. **Sync Qdrant automatique** :
+   - Après insertion/modification d'une FAQ, le service `FaqSyncService` pousse automatiquement les metadata + tags vers Qdrant comme **payload enrichis**.
+   - Les tags deviennent des filtres searchables via l'API de chat : `GET /api/v1/faq/search?topic=livraison`.
+
+4. **Frontend Admin** :
+   - Le composant React `FaqManager` affiche les tags existants et propose l'auto-complétion.
+   - L'utilisateur peut ajouter/modifier/supprimer des tags directement depuis l'interface.
+   - Les changements sont propagés en temps réel à PostgreSQL et Qdrant.
+
+5. **Cas d'usage** :
+   - **Admin ajoute FAQ** → Topic auto-détecté ou manuel → Stockage DB + Qdrant sync.
+   - **Chat utilisateur** → NLU détecte "paiement" → Recherche Qdrant filtrée par tag "paiement" → Résultats plus pertinents.
+   - **Dashboard** → Affiche les FAQs groupées par topic → Maintenance facilitée.
+
+Cela garantit une **organisation hiérarchique** et une **recherche ultra-ciblée** sans intervention manuelle répétitive.
+
+---
 
 **PR & contributions**
 - Branchez depuis `feat/model-implementation` ou créez une feature branch.
